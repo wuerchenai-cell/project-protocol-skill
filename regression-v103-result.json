@@ -1,0 +1,415 @@
+{
+  "suite": "project-protocol v1.0.3 7-fix regression",
+  "script_under_test": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
+  "script_sha256": "726cc19f35e5911377d84ed51cf839c232e20392f7780d9d05b732a2c7577cb3",
+  "python": "3.13.14",
+  "platform_verified": "Windows 11",
+  "platforms_not_verified": [
+    "Linux",
+    "Darwin"
+  ],
+  "elapsed_seconds": 37.31,
+  "cases": 29,
+  "passed": 29,
+  "failed": 0,
+  "all_passed": true,
+  "results": [
+    {
+      "name": "V01 all Unicode/ASCII line breaks keep one complete record",
+      "ok": true,
+      "detail": {
+        "separators_tested": [
+          "U+0085",
+          "U+2028",
+          "U+2029",
+          "U+000B",
+          "U+000C",
+          "U+001C",
+          "U+001D",
+          "U+001E",
+          "U+000D",
+          "U+000A",
+          "U+0009"
+        ]
+      }
+    },
+    {
+      "name": "V02 writer and reader share the same line-break definition",
+      "ok": true,
+      "detail": {
+        "writer_reader_break_set_identical": true
+      }
+    },
+    {
+      "name": "V03 four documented REJECTED status spellings are detected",
+      "ok": true,
+      "detail": {
+        "accepted_syntax": [
+          "REJECTED",
+          "\"REJECTED\"",
+          "'REJECTED'",
+          "REJECTED # already disproven"
+        ]
+      }
+    },
+    {
+      "name": "V04 misspelled idea status is an explicit error, not CLEAN",
+      "ok": true,
+      "detail": {
+        "label": "misspelled status",
+        "rc": 2,
+        "stderr": "ERROR: 想法文件状态无法解析，检查失败（不会当作无否决）：01_任务/待定/20261106-kw.md: status 值 'REJECTD' 非法，只允许 PROPOSED / ADOPTED / REJECTED\n"
+      }
+    },
+    {
+      "name": "V05 duplicate conflicting status is an explicit error",
+      "ok": true,
+      "detail": {
+        "label": "duplicate conflicting status",
+        "rc": 2,
+        "stderr": "ERROR: 想法文件状态无法解析，检查失败（不会当作无否决）：01_任务/待定/20261106-kw.md: status 被重复定义（可能互相冲突）\n"
+      }
+    },
+    {
+      "name": "V06 missing frontmatter closing delimiter is an explicit error",
+      "ok": true,
+      "detail": {
+        "label": "missing closing delimiter",
+        "rc": 2,
+        "stderr": "ERROR: 想法文件状态无法解析，检查失败（不会当作无否决）：01_任务/待定/20261106-kw.md: frontmatter 缺少结束分隔符 ---\n"
+      }
+    },
+    {
+      "name": "V07 missing frontmatter entirely is an explicit error",
+      "ok": true,
+      "detail": {
+        "rc": 2,
+        "stderr": "ERROR: 想法文件状态无法解析，检查失败（不会当作无否决）：01_任务/待定/20261106-kw.md: 缺少 frontmatter 起始分隔符 ---\n"
+      }
+    },
+    {
+      "name": "V08 over-long frontmatter header is an explicit error",
+      "ok": true,
+      "detail": {
+        "label": "header over 64 lines",
+        "rc": 2,
+        "stderr": "ERROR: 想法文件状态无法解析，检查失败（不会当作无否决）：01_任务/待定/20261106-kw.md: frontmatter 头部超过 64 行上限，无法安全解析\n"
+      }
+    },
+    {
+      "name": "V09 unparseable frontmatter line is an explicit error",
+      "ok": true,
+      "detail": {
+        "label": "unparseable header line",
+        "rc": 2,
+        "stderr": "ERROR: 想法文件状态无法解析，检查失败（不会当作无否决）：01_任务/待定/20261106-kw.md: frontmatter 第 2 行无法解析：'this is not a field'\n"
+      }
+    },
+    {
+      "name": "V10 long valid frontmatter header still detects REJECTED",
+      "ok": true,
+      "detail": {
+        "padding_lines": 24,
+        "rc": 1
+      }
+    },
+    {
+      "name": "V11 body-only REJECTED reference is not a status",
+      "ok": true,
+      "detail": {
+        "rc": 0,
+        "body_reference_not_a_status": true
+      }
+    },
+    {
+      "name": "V12 over-long reason is a parse error, not a process-level crash",
+      "ok": true,
+      "detail": {
+        "rc": 2,
+        "stderr": "ERROR: 想法文件状态无法解析，检查失败（不会当作无否决）：01_任务/待定/20261106-kw.md: reason 字段超过 200 字，无法安全解析\n"
+      }
+    },
+    {
+      "name": "V13 unclosed quoted status is an explicit error",
+      "ok": true,
+      "detail": {
+        "label": "unclosed quote",
+        "rc": 2,
+        "stderr": "ERROR: 想法文件状态无法解析，检查失败（不会当作无否决）：01_任务/待定/20261106-kw.md: status 引号未闭合：'\"REJECTED'\n"
+      }
+    },
+    {
+      "name": "V14 junk after quoted status is an explicit error",
+      "ok": true,
+      "detail": {
+        "label": "junk after quoted status",
+        "rc": 2,
+        "stderr": "ERROR: 想法文件状态无法解析，检查失败（不会当作无否决）：01_任务/待定/20261106-kw.md: status 引号后存在无法解析的内容：'garbage'\n"
+      }
+    },
+    {
+      "name": "V15 BOM / plain L0 log both detect REJECTED; body untouched",
+      "ok": true,
+      "detail": {
+        "bom": 1,
+        "plain": 1
+      }
+    },
+    {
+      "name": "V16 BOM / plain idea frontmatter both detect REJECTED",
+      "ok": true,
+      "detail": {
+        "bom": 1,
+        "plain": 1
+      }
+    },
+    {
+      "name": "V19 partial normal file write reported; no AGENTS.md",
+      "ok": true,
+      "detail": {
+        "rc": 2,
+        "files": [
+          "00_定义/CHARTER.md",
+          "00_定义/READER.md",
+          "00_定义/RULES.md"
+        ],
+        "guards": {
+          "add": 2,
+          "tail": 2,
+          "check": 2
+        }
+      }
+    },
+    {
+      "name": "V20 partial completion temp write never publishes AGENTS.md",
+      "ok": true,
+      "detail": {
+        "stage": "write",
+        "rc": 2,
+        "files": [
+          "00_定义/ASSETS.md",
+          "00_定义/CHARTER.md",
+          "00_定义/COLLAB.md",
+          "00_定义/ENV.md",
+          "00_定义/GLOSSARY.md",
+          "00_定义/READER.md",
+          "00_定义/RULES.md",
+          "05_证据/FAILURES.md",
+          "06_记忆/L0_LOG.md",
+          "06_记忆/L1_STATE.md",
+          "07_素材/LARGEFILES.md",
+          "99_归档/ARCHIVE.md",
+          "99_归档/CHANGELOG.md",
+          "AGENTS.md.init.tmp"
+        ],
+        "guards": {
+          "add": 2,
+          "tail": 2,
+          "check": 2
+        },
+        "temp_has_content": true,
+        "temp_has_marker": false
+      }
+    },
+    {
+      "name": "V21 flush-stage failure leaves full temp but no AGENTS.md",
+      "ok": true,
+      "detail": {
+        "stage": "flush",
+        "rc": 2,
+        "files": [
+          "00_定义/ASSETS.md",
+          "00_定义/CHARTER.md",
+          "00_定义/COLLAB.md",
+          "00_定义/ENV.md",
+          "00_定义/GLOSSARY.md",
+          "00_定义/READER.md",
+          "00_定义/RULES.md",
+          "05_证据/FAILURES.md",
+          "06_记忆/L0_LOG.md",
+          "06_记忆/L1_STATE.md",
+          "07_素材/LARGEFILES.md",
+          "99_归档/ARCHIVE.md",
+          "99_归档/CHANGELOG.md",
+          "AGENTS.md.init.tmp"
+        ],
+        "guards": {
+          "add": 2,
+          "tail": 2,
+          "check": 2
+        },
+        "temp_has_content": true,
+        "temp_has_marker": true
+      }
+    },
+    {
+      "name": "V22 close-stage and publish-stage failures never publish AGENTS.md",
+      "ok": true,
+      "detail": {
+        "close": {
+          "stage": "close",
+          "rc": 2,
+          "files": [
+            "00_定义/ASSETS.md",
+            "00_定义/CHARTER.md",
+            "00_定义/COLLAB.md",
+            "00_定义/ENV.md",
+            "00_定义/GLOSSARY.md",
+            "00_定义/READER.md",
+            "00_定义/RULES.md",
+            "05_证据/FAILURES.md",
+            "06_记忆/L0_LOG.md",
+            "06_记忆/L1_STATE.md",
+            "07_素材/LARGEFILES.md",
+            "99_归档/ARCHIVE.md",
+            "99_归档/CHANGELOG.md",
+            "AGENTS.md.init.tmp"
+          ],
+          "guards": {
+            "add": 2,
+            "tail": 2,
+            "check": 2
+          },
+          "temp_has_content": true,
+          "temp_has_marker": true
+        },
+        "replace": {
+          "stage": "replace",
+          "rc": 2,
+          "files": [
+            "00_定义/ASSETS.md",
+            "00_定义/CHARTER.md",
+            "00_定义/COLLAB.md",
+            "00_定义/ENV.md",
+            "00_定义/GLOSSARY.md",
+            "00_定义/READER.md",
+            "00_定义/RULES.md",
+            "05_证据/FAILURES.md",
+            "06_记忆/L0_LOG.md",
+            "06_记忆/L1_STATE.md",
+            "07_素材/LARGEFILES.md",
+            "99_归档/ARCHIVE.md",
+            "99_归档/CHANGELOG.md",
+            "AGENTS.md.init.tmp"
+          ],
+          "guards": {
+            "add": 2,
+            "tail": 2,
+            "check": 2
+          },
+          "temp_has_content": true,
+          "temp_has_marker": true
+        }
+      }
+    },
+    {
+      "name": "V23 truncated AGENTS.md rejected by add/tail/check",
+      "ok": true,
+      "detail": {
+        "guards": {
+          "add": 2,
+          "tail": 2,
+          "check": 2
+        },
+        "message": "ERROR: 项目初始化未完成：AGENTS.md 缺少可识别的版本身份与完成标识，可能是上次 init 中途失败留下的残缺入口。不会把它当作已初始化项目；请按当时的恢复清单人工处理，或清理目录后重新 init。\n"
+      }
+    },
+    {
+      "name": "V24 complete legacy AGENTS.md remains usable",
+      "ok": true,
+      "detail": {
+        "add_rc": 0,
+        "check_rc": 0,
+        "fixture_bytes": 4439,
+        "fixture_sha256": "DE8AE2EFFD10AAFCEC8510DE8CCDEA18B7257C1D1F3C7C3E1B2E35AC741362D8"
+      }
+    },
+    {
+      "name": "V25 .git is skipped by memory scan, docs keep Git operations free",
+      "ok": true,
+      "detail": {
+        "check_rc": 0,
+        "docs_checked": [
+          "AGENTS.md (generated)",
+          "PROJECT_TEMPLATE.md",
+          "SKILL.md"
+        ]
+      }
+    },
+    {
+      "name": "V26 non-empty adopted project can be handed over without re-init",
+      "ok": true,
+      "detail": {
+        "handoff_rc": 0,
+        "reinit_rc": 2,
+        "changed_files": [
+          "06_记忆/L0_LOG.md",
+          "06_记忆/L0_LOG.md.lock"
+        ]
+      }
+    },
+    {
+      "name": "V27 --lock-timeout rejects nan/inf/-inf/0/negative/junk",
+      "ok": true,
+      "detail": {
+        "rejected": [
+          "nan",
+          "inf",
+          "-inf",
+          "NaN",
+          "Infinity",
+          "0",
+          "-1",
+          "abc"
+        ]
+      }
+    },
+    {
+      "name": "V28 finite timeout fails loudly, normal lock still waits/succeeds",
+      "ok": true,
+      "detail": {
+        "contender_rc": 2,
+        "bounded_seconds": 0.47,
+        "after_release_rc": 0
+      }
+    },
+    {
+      "name": "V29 killed lock holder releases the OS lock",
+      "ok": true,
+      "detail": {
+        "holder_killed_rc": 1,
+        "add_rc": 0
+      }
+    },
+    {
+      "name": "V30 SKILL/模板/内嵌 AGENTS/INSTALL/CLI help 一致性",
+      "ok": true,
+      "detail": {
+        "docs_checked": [
+          "AGENTS.md (generated)",
+          "CLI help",
+          "INSTALL.md",
+          "PROJECT_TEMPLATE.md",
+          "SKILL.md"
+        ],
+        "help_sections": [
+          "add",
+          "check",
+          "init",
+          "main",
+          "tail"
+        ]
+      }
+    },
+    {
+      "name": "V31 transient lock-open sharing violation retried, persistent fails loudly",
+      "ok": true,
+      "detail": {
+        "transient_retries": 3,
+        "records_after_retry": 1,
+        "persistent_rc": 2,
+        "records_after_persistent_failure": 0
+      }
+    }
+  ]
+}

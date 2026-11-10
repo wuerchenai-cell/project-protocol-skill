@@ -1,0 +1,117 @@
+{
+  "suite": "project-protocol v1.1.0 handoff/resume + v1.0.4 compat",
+  "cases": 12,
+  "passed": 12,
+  "failed": 0,
+  "all_passed": true,
+  "elapsed_seconds": 13.47,
+  "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
+  "script_sha256": "726CC19F35E5911377D84ED51CF839C232E20392F7780D9D05B732A2C7577CB3",
+  "python": "3.13.14",
+  "platform_verified": "Windows-11-10.0.26200-SP0",
+  "platforms_not_verified": [
+    "Linux",
+    "Darwin",
+    "network filesystems",
+    "non-NTFS Windows filesystems"
+  ],
+  "hosts_not_verified": [
+    "skill loading",
+    "long-running agent behaviour",
+    "hooks"
+  ],
+  "results": [
+    {
+      "name": "A01 handoff emits a HANDOFF card with required sections",
+      "ok": true,
+      "detail": {
+        "card": "HANDOFF-20261109-2109.md",
+        "card_bytes": 1078
+      }
+    },
+    {
+      "name": "A02 handoff card binds goal/wip/negative from L0 + L1",
+      "ok": true,
+      "detail": {
+        "card": "06_记忆/HANDOFF-20261109-2109.md",
+        "next_section": "progress.py resume --lines 10"
+      }
+    },
+    {
+      "name": "A03 handoff card path single-sited, no %-placeholder",
+      "ok": true,
+      "detail": {
+        "card": "06_记忆/HANDOFF-20261109-2109.md"
+      }
+    },
+    {
+      "name": "A04 handoff opens card exclusively (x), never overwrites",
+      "ok": true,
+      "detail": {
+        "card": "06_记忆/HANDOFF-20261109-1230.md",
+        "rival_bytes": 68,
+        "stderr": "ERROR: 交接卡片已存在：06_记忆/HANDOFF-20261109-1230.md（不覆盖任何文件；如需新卡片请等下一分钟或手工处理）\n"
+      }
+    },
+    {
+      "name": "A05 resume prints a bounded cold-start package",
+      "ok": true,
+      "detail": {
+        "stdout_bytes": 2289
+      }
+    },
+    {
+      "name": "A06 resume works without any prior card",
+      "ok": true,
+      "detail": {
+        "has_card_section": true
+      }
+    },
+    {
+      "name": "A07 resume honours the --max-lines budget",
+      "ok": true,
+      "detail": {
+        "resized": "--max-lines 5"
+      }
+    },
+    {
+      "name": "A08 resume names the card under 06_记忆/, not on L1",
+      "ok": true,
+      "detail": {
+        "snapshot_line": "06_记忆/ 下"
+      }
+    },
+    {
+      "name": "B01 init publishes the v1.1.0 identity, checker CLEAN",
+      "ok": true,
+      "detail": {
+        "version": "1.1.0",
+        "bytes": 7696
+      }
+    },
+    {
+      "name": "B02 a real complete v1.0.4 entry stays usable after upgrade",
+      "ok": true,
+      "detail": {
+        "bytes": 7705,
+        "version": "v1.0.4"
+      }
+    },
+    {
+      "name": "B03 the v1.0.4 fixture byte-matches the recorded fingerprint",
+      "ok": true,
+      "detail": {
+        "fixture_bytes": 7705,
+        "fixture_sha256": "4F8472DA6CBBAE95A4DC66F2ABF21801E9C3FE586A2180762299C4DE9D4B03C5"
+      }
+    },
+    {
+      "name": "B04 a truncated v1.0.4 entry is rejected",
+      "ok": true,
+      "detail": {
+        "kept_bytes": 7625,
+        "stderr": "ERROR: 项目初始化未完成：v1.0.4 的 AGENTS.md 长度不足，疑似被截断。\n"
+      }
+    }
+  ]
+}

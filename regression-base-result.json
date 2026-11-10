@@ -1,0 +1,541 @@
+{
+  "suite": "project-protocol v1.0.2 regression",
+  "script_under_test": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
+  "script_sha256": "726cc19f35e5911377d84ed51cf839c232e20392f7780d9d05b732a2c7577cb3",
+  "python": "3.13.14",
+  "platform_verified": "Windows 11",
+  "platforms_not_verified": [
+    "Linux",
+    "Darwin"
+  ],
+  "concurrency_rounds": 10,
+  "elapsed_seconds": 87.07,
+  "cases": 24,
+  "passed": 24,
+  "failed": 0,
+  "all_passed": true,
+  "results": [
+    {
+      "name": "R01 empty dir init succeeds",
+      "ok": true,
+      "detail": {
+        "files": 14
+      }
+    },
+    {
+      "name": "R02 non-empty old project rejected with zero writes",
+      "ok": true,
+      "detail": {
+        "rc": 2,
+        "unchanged": true
+      }
+    },
+    {
+      "name": "R03 repeat init rejected byte-identical",
+      "ok": true,
+      "detail": {
+        "rc": 2
+      }
+    },
+    {
+      "name": "R04 pre-existing AGENTS.md rejected with zero writes",
+      "ok": true,
+      "detail": {
+        "rc": 2
+      }
+    },
+    {
+      "name": "R05 parent path conflict -> zero writes",
+      "ok": true,
+      "detail": {
+        "rc": 2,
+        "zero_writes": true
+      }
+    },
+    {
+      "name": "R06 injected mid-init failure -> accurate manifest + no AGENTS.md",
+      "ok": true,
+      "detail": {
+        "worker_rc": 0,
+        "inner_rc": 2,
+        "created_files": [
+          "00_定义/CHARTER.md",
+          "00_定义/COLLAB.md",
+          "00_定义/READER.md",
+          "00_定义/RULES.md",
+          "worker.json"
+        ],
+        "agents_written": false
+      }
+    },
+    {
+      "name": "R07 add/tail roundtrip and 5-field format",
+      "ok": true,
+      "detail": {
+        "line": "- [2026-11-09 20:06] DONE | T01 | 正常节点 | 04_成果/T01/交付/报告.txt | NEXT review"
+      }
+    },
+    {
+      "name": "R08 newline and pipe field sanitisation",
+      "ok": true,
+      "detail": {
+        "line": "- [2026-11-09 20:06] DECIDED | T01 | one REJECTED / fake field | - | NEXT -"
+      }
+    },
+    {
+      "name": "R09 missing final newline -> independent records, negative found",
+      "ok": true,
+      "detail": {
+        "rows": [
+          "- [2026-11-06 10:00] DONE | T01 | previous | - | NEXT -",
+          "- [2026-11-09 20:06] REJECTED | T01 | newline-bug-method | - | NEXT -"
+        ]
+      }
+    },
+    {
+      "name": "R10 current REJECTED strict detection",
+      "ok": true,
+      "detail": {
+        "rc": 1
+      }
+    },
+    {
+      "name": "R11 archived monthly BLOCKED strict detection",
+      "ok": true,
+      "detail": {
+        "rc": 1
+      }
+    },
+    {
+      "name": "R12 idea frontmatter REJECTED strict detection with status/reason/source",
+      "ok": true,
+      "detail": {
+        "strict_rc": 1,
+        "plain_rc": 0,
+        "strict_stdout": "CHECK 'discarded-idea-method' | files scanned: 3 | hits: 1 | rejected/blocked: 1 | idea_rejected: 1 | shown: 1 | truncated: 0\n[!] IDEA 01_任务/待定/20261106-idea.md | status=REJECTED | reason=与 T03 已验证结论冲突 | source=frontmatter\nSTRICT: FAIL — 命中否决/阻塞记录 1 条，此路已试过，先看原因再决定是否重做。"
+      }
+    },
+    {
+      "name": "R13 quoted REJECTED in body is not a status",
+      "ok": true,
+      "detail": {
+        "rc": 0
+      }
+    },
+    {
+      "name": "R14 non-existent root -> explicit error",
+      "ok": true,
+      "detail": {
+        "rc": 2,
+        "stderr": "ERROR: 项目根不存在或不是目录：C:\\Users\\tjs\\AppData\\Local\\Temp\\tmp.xkgJJGmCbW\\pp-reg-mre3cp9d\\does-not-exist-r14"
+      }
+    },
+    {
+      "name": "R15 old project without protocol -> explicit error",
+      "ok": true,
+      "detail": {
+        "rc": 2,
+        "stderr": "ERROR: 项目未采用 project-protocol（缺少协议文件 AGENTS.md），或初始化未完成。不会自动补建或迁移旧项目；如需接入，请由用户显式授权后单独处理。"
+      }
+    },
+    {
+      "name": "R16 unreadable protocol file -> explicit error",
+      "ok": true,
+      "detail": {
+        "rc": 2,
+        "stderr": "ERROR: 协议文件不可读（不是普通文件）：06_记忆/L0_LOG.md"
+      }
+    },
+    {
+      "name": "R17 artifact path validation and backslash normalisation",
+      "ok": true,
+      "detail": {
+        "rejected": [
+          {
+            "input": "C:/outside/result.txt",
+            "rc": 2
+          },
+          {
+            "input": "../outside/result.txt",
+            "rc": 2
+          },
+          {
+            "input": "/absolute/result.txt",
+            "rc": 2
+          },
+          {
+            "input": "~/outside.txt",
+            "rc": 2
+          },
+          {
+            "input": "a/../../b.txt",
+            "rc": 2
+          },
+          {
+            "input": "D:\\outside\\r.txt",
+            "rc": 2
+          }
+        ],
+        "normalized": "- [2026-11-09 20:06] DONE | T01 | probe-good | 04_成果/T01/交付/报告.txt | NEXT -"
+      }
+    },
+    {
+      "name": "R18 TID ASCII rules incl. T100",
+      "ok": true,
+      "detail": {
+        "valid": [
+          "T01",
+          "T09",
+          "T10",
+          "T99",
+          "T100",
+          "T123"
+        ],
+        "invalid": [
+          "T00",
+          "T0",
+          "T1",
+          "T010",
+          "T１２",
+          "T１2",
+          "t01",
+          "X01",
+          "T01x",
+          "T-1"
+        ]
+      }
+    },
+    {
+      "name": "R19 tail --lines 0 / negative / default",
+      "ok": true,
+      "detail": {
+        "zero_lines": 0,
+        "negative_rc": 2
+      }
+    },
+    {
+      "name": "R20 1000 common-keyword hits stay within output budget",
+      "ok": true,
+      "detail": {
+        "rc": 0,
+        "output_lines": 42,
+        "output_bytes": 3905
+      }
+    },
+    {
+      "name": "R21 --strict judges full result outside display window",
+      "ok": true,
+      "detail": {
+        "strict_zero_window_rc": 1,
+        "strict_small_window_rc": 1
+      }
+    },
+    {
+      "name": "R22 deterministic lock contention: timeout vs wait",
+      "ok": true,
+      "detail": {
+        "timeout_rc": 2,
+        "wait_rc": 0
+      }
+    },
+    {
+      "name": "R23 stale lock file is not stolen",
+      "ok": true,
+      "detail": {
+        "rc": 2,
+        "stale_lock_not_stolen": true
+      }
+    },
+    {
+      "name": "R24 real 4-process x 20-record concurrency, 10 rounds",
+      "ok": true,
+      "detail": {
+        "rounds": 10,
+        "processes_per_round": 4,
+        "cli_adds_per_process": 20,
+        "all_rounds": [
+          {
+            "round": 1,
+            "worker_rcs": [
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              }
+            ],
+            "cli_rcs_all_zero": true,
+            "cli_calls": 80,
+            "log_lines": 80,
+            "well_formed": true,
+            "unique_records": 80,
+            "expected_records": 80,
+            "ok": true
+          },
+          {
+            "round": 2,
+            "worker_rcs": [
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              }
+            ],
+            "cli_rcs_all_zero": true,
+            "cli_calls": 80,
+            "log_lines": 80,
+            "well_formed": true,
+            "unique_records": 80,
+            "expected_records": 80,
+            "ok": true
+          },
+          {
+            "round": 3,
+            "worker_rcs": [
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              }
+            ],
+            "cli_rcs_all_zero": true,
+            "cli_calls": 80,
+            "log_lines": 80,
+            "well_formed": true,
+            "unique_records": 80,
+            "expected_records": 80,
+            "ok": true
+          },
+          {
+            "round": 4,
+            "worker_rcs": [
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              }
+            ],
+            "cli_rcs_all_zero": true,
+            "cli_calls": 80,
+            "log_lines": 80,
+            "well_formed": true,
+            "unique_records": 80,
+            "expected_records": 80,
+            "ok": true
+          },
+          {
+            "round": 5,
+            "worker_rcs": [
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              }
+            ],
+            "cli_rcs_all_zero": true,
+            "cli_calls": 80,
+            "log_lines": 80,
+            "well_formed": true,
+            "unique_records": 80,
+            "expected_records": 80,
+            "ok": true
+          },
+          {
+            "round": 6,
+            "worker_rcs": [
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              }
+            ],
+            "cli_rcs_all_zero": true,
+            "cli_calls": 80,
+            "log_lines": 80,
+            "well_formed": true,
+            "unique_records": 80,
+            "expected_records": 80,
+            "ok": true
+          },
+          {
+            "round": 7,
+            "worker_rcs": [
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              }
+            ],
+            "cli_rcs_all_zero": true,
+            "cli_calls": 80,
+            "log_lines": 80,
+            "well_formed": true,
+            "unique_records": 80,
+            "expected_records": 80,
+            "ok": true
+          },
+          {
+            "round": 8,
+            "worker_rcs": [
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              }
+            ],
+            "cli_rcs_all_zero": true,
+            "cli_calls": 80,
+            "log_lines": 80,
+            "well_formed": true,
+            "unique_records": 80,
+            "expected_records": 80,
+            "ok": true
+          },
+          {
+            "round": 9,
+            "worker_rcs": [
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              }
+            ],
+            "cli_rcs_all_zero": true,
+            "cli_calls": 80,
+            "log_lines": 80,
+            "well_formed": true,
+            "unique_records": 80,
+            "expected_records": 80,
+            "ok": true
+          },
+          {
+            "round": 10,
+            "worker_rcs": [
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              },
+              {
+                "rc": 0,
+                "stderr_tail": ""
+              }
+            ],
+            "cli_rcs_all_zero": true,
+            "cli_calls": 80,
+            "log_lines": 80,
+            "well_formed": true,
+            "unique_records": 80,
+            "expected_records": 80,
+            "ok": true
+          }
+        ]
+      }
+    }
+  ]
+}
