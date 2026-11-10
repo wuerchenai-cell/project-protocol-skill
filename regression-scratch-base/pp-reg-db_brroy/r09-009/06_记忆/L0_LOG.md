@@ -1,2 +1,0 @@
-- [2026-11-06 10:00] DONE | T01 | previous | - | NEXT -
-- [2026-11-10 15:15] REJECTED | T01 | newline-bug-method | - | NEXT -
