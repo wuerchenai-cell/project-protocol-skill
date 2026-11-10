@@ -117,14 +117,14 @@ PP_RESULTS=./independent-v104-results.json \
 ```bash
 # 交班前：留一张交接快照（卡片只读，绝不覆盖）
 python progress.py handoff --by "换班身份" [--tail-lines 30]
-# → HANDOFF OK | 06_记忆/HANDOFF-YYYYMMDD-HHMM.md | N 字节 | sha256 …
+# → HANDOFF OK | 06_记忆/HANDOFF-YYYYMMDD-HHMMSS.md | N 字节 | sha256 …
 
 # 接班时：一次读入即冷启动（输出受预算控制，带 token 量化）
 python progress.py resume [--lines 30] [--max-lines 40] [--max-bytes 8192]
 ```
 
 - `handoff` 先把 L0 末尾若干条 + L1 六节 + 最近 WIP 的 NEXT 命令 + 已否决清单压进一张
-  `06_记忆/HANDOFF-YYYYMMDD-HHMM.md` 快照；卡片用 `x` 独占方式写，**同名绝不覆盖**，冲突即停。
+  `06_记忆/HANDOFF-YYYYMMDD-HHMMSS.md` 快照；卡片写前先落临时文件，再用原子无覆盖发布
 - `resume` 打印一次「接手包」：读入清单（行/字节/约略 token）+ 已否决/阻塞行 + 最新快照全文 +
   L1 全文 + L0 末尾，默认只打 40 行 / 8192 字节，可用 `--max-lines` / `--max-bytes` 放宽。
 - 卡片**仅供导航，不是事实源**；与 `L1_STATE.md` 冲突时以后者为准。没跑过 `handoff` 的项目也能

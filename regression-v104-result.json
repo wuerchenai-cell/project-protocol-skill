@@ -4,7 +4,7 @@
   "passed": 22,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 23.33,
+  "elapsed_seconds": 23.18,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
   "script_sha256": "12DC7E880A75541BBCA884FDC355F745BC02FF45BC921136BB66D25F8DD4422F",
   "python": "3.13.14",

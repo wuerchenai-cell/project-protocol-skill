@@ -8,7 +8,7 @@
     "Linux",
     "Darwin"
   ],
-  "elapsed_seconds": 41.5,
+  "elapsed_seconds": 40.37,
   "cases": 29,
   "passed": 29,
   "failed": 0,
@@ -369,7 +369,7 @@
       "ok": true,
       "detail": {
         "contender_rc": 2,
-        "bounded_seconds": 0.44,
+        "bounded_seconds": 0.49,
         "after_release_rc": 0
       }
     },

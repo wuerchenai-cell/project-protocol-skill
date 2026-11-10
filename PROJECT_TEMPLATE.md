@@ -267,7 +267,7 @@ conclusion: 分层记忆适合状态类文件，不适合产出物分类
 
 **`check` 契约**：退出码 `0` 正常无否决 / `1` 命中否决（`--strict` 作为硬门禁并把 REJECTED 想法计入）/ `2` 使用或读取错误（根不存在、未初始化或初始化未完成、协议文件缺失或不可读、想法 frontmatter 解析失败）。默认输出预算 40 条 / 8192 字节，可用 `--max-lines`、`--max-bytes` 调整；否决/阻塞优先展示，`--strict` 依据**全部**命中判定，不因截断漏判。
 
-**`HANDOFF` 卡片格式**（v1.8.0 新增；文件名 `06_记忆/HANDOFF-YYYYMMDD-HHMM.md`，分钟粒度；只读快照，**不是事实源**）
+**`HANDOFF` 卡片格式**（v1.8.0 新增；文件名 `06_记忆/HANDOFF-YYYYMMDD-HHMMSS.md`，秒级粒度；只读快照，**不是事实源**）
 
 由 `progress.py handoff --by <生成者>` 生成，`progress.py resume` 读取。内容是 L1 六节 + L0 末尾若干行的**固化视图**，供下一个 agent 冷启动。
 

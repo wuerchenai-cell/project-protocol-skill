@@ -275,17 +275,17 @@
         "handoff": {
           "add": {
             "rc": 0,
-            "stdout": "- [2026-11-09 21:07] DONE | - | normal-token | - | NEXT -\n",
+            "stdout": "- [2026-11-10 16:40] DONE | - | normal-token | - | NEXT -\n",
             "stderr": ""
           },
           "tail": {
             "rc": 0,
-            "stdout": "- [2026-11-09 21:07] DONE | - | normal-token | - | NEXT -\n",
+            "stdout": "- [2026-11-10 16:40] DONE | - | normal-token | - | NEXT -\n",
             "stderr": ""
           },
           "check": {
             "rc": 0,
-            "stdout": "CHECK 'normal-token' | files scanned: 2 | hits: 1 | rejected/blocked: 0 | idea_rejected: 0 | shown: 1 | truncated: 0\n06_记忆/L0_LOG.md:8: - [2026-11-09 21:07] DONE | - | normal-token | - | NEXT -\nSTRICT: CLEAN\n",
+            "stdout": "CHECK 'normal-token' | files scanned: 2 | hits: 1 | rejected/blocked: 0 | idea_rejected: 0 | shown: 1 | truncated: 0\n06_记忆/L0_LOG.md:8: - [2026-11-10 16:40] DONE | - | normal-token | - | NEXT -\nSTRICT: CLEAN\n",
             "stderr": ""
           }
         },
@@ -333,7 +333,7 @@
         "init": {
           "rc": 2,
           "stdout": "",
-          "stderr": "INIT FAILED: 初始化中途异常，本次未完成。\n发布冲突：预检之后、发布之前，AGENTS.md 已由其他写者创建。\n本次 init 未覆盖、未删除、未改写该文件，也不把它列入本次产物清单。\n本次 init 实际创建的路径（不含竞争文件）：14 个；暂存文件：AGENTS.md.init.tmp\n完整写入文件（14）：\n  00_定义/CHARTER.md\n  00_定义/RULES.md\n  00_定义/READER.md\n  00_定义/COLLAB.md\n  00_定义/ENV.md\n  00_定义/GLOSSARY.md\n  00_定义/ASSETS.md\n  06_记忆/L0_LOG.md\n  06_记忆/L1_STATE.md\n  05_证据/FAILURES.md\n  07_素材/LARGEFILES.md\n  99_归档/ARCHIVE.md\n  99_归档/CHANGELOG.md\n  AGENTS.md.init.tmp\n已创建但未完整写入/未发布的文件（1，含部分写入、flush/close 失败、临时文件）：\n  AGENTS.md.init.tmp\n临时文件（1）：AGENTS.md.init.tmp\n已创建目录（5）：00_定义, 06_记忆, 05_证据, 07_素材, 99_归档\n完成入口 AGENTS.md 实际状态：由其他写者创建，不属于本次 init 产物；全部字节已完整保留（79 字节 / sha256 92217E692AC5BD08F9C54C410EFAB6F3DB56A73EE5638A72A7664B90F463C569），未覆盖、未删除\n临时文件说明：AGENTS.md.init.tmp 是完成入口的暂存副本（已完整写入但未发布），按上方清单记录其实际状态；仅为人工核对保留，脚本不会删除任何内容。\n恢复方法：AGENTS.md 归其他写者所有，脚本不删除、不覆盖、不改写。请先与对方协调其归属；确认后由人工决定是否清理本次清单里的文件、暂存文件与空目录，再重新运行 init。脚本不会自动回滚。\nERROR: 初始化中断：PublishConflict('发布时 AGENTS.md 已由其他写者创建；原子无覆盖发布被拒绝')\n"
+          "stderr": "INIT FAILED: 初始化中途异常，本次未完成。\n发布冲突：预检之后、发布之前，AGENTS.md 已由其他写者创建。\n本次 init 未覆盖、未删除、未改写该文件，也不把它列入本次产物清单。\n本次 init 实际创建的路径（不含竞争文件）：14 个；暂存文件：AGENTS.md.init.tmp\n完整写入文件（14）：\n  00_定义/CHARTER.md\n  00_定义/RULES.md\n  00_定义/READER.md\n  00_定义/COLLAB.md\n  00_定义/ENV.md\n  00_定义/GLOSSARY.md\n  00_定义/ASSETS.md\n  06_记忆/L0_LOG.md\n  06_记忆/L1_STATE.md\n  05_证据/FAILURES.md\n  07_素材/LARGEFILES.md\n  99_归档/ARCHIVE.md\n  99_归档/CHANGELOG.md\n  AGENTS.md.init.tmp\n已创建但未完整写入/未发布的文件（1，含部分写入、flush/close 失败、临时文件）：\n  AGENTS.md.init.tmp\n临时文件（1）：AGENTS.md.init.tmp\n已创建目录（5）：00_定义, 06_记忆, 05_证据, 07_素材, 99_归档\n完成入口 AGENTS.md 实际状态：由其他写者创建，不属于本次 init 产物；全部字节已完整保留（79 字节 / sha256 92217E692AC5BD08F9C54C410EFAB6F3DB56A73EE5638A72A7664B90F463C569），未覆盖、未删除\n临时文件说明：AGENTS.md.init.tmp 是完成入口的暂存副本（已完整写入但未发布），按上方清单记录其实际状态；仅为人工核对保留，脚本不会删除任何内容。\n恢复方法：AGENTS.md 归其他写者所有，脚本不删除、不覆盖、不改写。请先与对方协调其归属；确认后由人工决定是否清理本次清单里的文件、暂存文件与空目录，再重新运行 init。脚本不会自动回滚。\nERROR: 初始化中断：PublishConflict('发布时 AGENTS.md 完成入口 已由其他写者创建；原子无覆盖发布被拒绝')\n"
         },
         "existing_user_content": "# Existing user AGENTS\n\nKeep this rule; created by another writer during init.\n",
         "user_file_preserved": true,
