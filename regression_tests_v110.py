@@ -123,7 +123,7 @@ class Suite:
 # A/01 - A/04 : the handoff command
 # ---------------------------------------------------------------------------
 HANDOFF_HEADER = "# HANDOFF 交接快照"
-CARD_RE = re.compile(r"^HANDOFF-\d{8}-\d{4}\.md$")
+CARD_RE = re.compile(r"^HANDOFF-\d{8}-\d{6}\.md$")
 
 
 def a01(s):
@@ -214,7 +214,7 @@ def a04(s):
     finally:
         s.mod.datetime = real_dt
     assert rc == 2, rc
-    assert "已存在" in cap_err2.getvalue()[:DETAIL_CHARS], cap_err2.getvalue()[:DETAIL_CHARS]
+    assert "已由其他写者创建" in cap_err2.getvalue()[:DETAIL_CHARS], cap_err2.getvalue()[:DETAIL_CHARS]
     assert after == rival, "the rival card was overwritten"
     assert hashlib.sha256(after).hexdigest().upper() == rival_sha
     return {"card": rel, "rival_bytes": len(after),

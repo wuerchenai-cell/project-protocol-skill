@@ -200,24 +200,60 @@ def w02(s):
 
 
 def w03(s):
-    """A filesystem that cannot provide the atomic primitive must error loudly;
-    no silent downgrade to a possibly-clobbering operation."""
+    """Filesystem without hardlink support still publishes via O_EXCL | O_CREAT;
+    the fallback is atomic and never clobbers (no os.replace anywhere)."""
     p = s.root("unsupported")
-    original = s.mod.os.link
+    replace_calls = []
 
     def unsupported(src, dst):
         raise OSError(errno.EOPNOTSUPP, "hard links not supported here")
 
-    out = capture_init(s, p, patch=unsupported)
+    def boom_replace(*args, **kwargs):
+        replace_calls.append("replace")
+        raise OSError("os.replace must never be used in publish path")
+
+    original_replace = s.mod.os.replace
+    try:
+        s.mod.os.replace = boom_replace
+        out = capture_init(s, p, patch=unsupported)
+    finally:
+        s.mod.os.replace = original_replace
+    assert out["rc"] == 0, (out["rc"], out["stderr"][:DETAIL_CHARS])
+    assert not replace_calls, "publish path called os.replace"
+    assert (p / "AGENTS.md").exists(), "O_EXCL fallback did not publish AGENTS.md"
+    agents = (p / "AGENTS.md").read_bytes()
+    assert s.mod.AGENTS_COMPLETION_MARKER.encode("utf-8") in agents
+    assert not (p / s.mod.INIT_TEMP_REL).exists(), "temp residue after successful fallback"
+    assert_usable(guard(s, p))
+    return {"init_rc": out["rc"], "replace_calls": len(replace_calls)}
+
+
+def w3b(s):
+    """When BOTH os.link and O_EXCL | O_CREAT are unsupported, init must fail
+    loudly; it never degrades to an os.replace that could clobber a writer."""
+    p = s.root("unsupported-both")
+    original_link = s.mod.os.link
+    original_open = s.mod.os.open
+
+    def unsupported_link(src, dst):
+        raise OSError(errno.EOPNOTSUPP, "hard links not supported here")
+
+    def unsupported_open(path, flags, mode=0o777):
+        raise OSError(errno.EOPNOTSUPP, "O_EXCL open not supported either")
+
+    try:
+        s.mod.os.open = unsupported_open
+        out = capture_init(s, p, patch=unsupported_link)
+    finally:
+        s.mod.os.link = original_link
+        s.mod.os.open = original_open
     assert out["rc"] == 2, (out["rc"], out["stderr"][:DETAIL_CHARS])
     assert "不支持原子无覆盖发布" in out["stderr"]
     assert "不会降级" in out["stderr"]
     assert not (p / "AGENTS.md").exists(), "AGENTS.md published despite failure"
     assert (p / s.mod.INIT_TEMP_REL).exists(), "temp file not reported"
     assert "\n  AGENTS.md.init.tmp\n" in out["stderr"]
-    assert_rejected(guard(s, p, "unsupported-token"))
-    # restore for the rest of the suite even though capture_init already did
-    s.mod.os.link = original
+    assert_rejected(guard(s, p, "unsupported-both-token"))
     return {"init_rc": out["rc"], "stderr": out["stderr"][:DETAIL_CHARS]}
 
 
@@ -471,7 +507,8 @@ def w23(s):
 CASES = [
     ("W01 normal init publishes complete entry, no temp residue", w01),
     ("W02 B02 competing AGENTS.md survives publish byte-for-byte", w02),
-    ("W03 unsupported atomic primitive errors, no downgrade", w03),
+    ("W03 hardlink unsupported -> O_EXCL fallback publishes (no replace)", w03),
+    ("W3b hardlink AND O_EXCL both unsupported -> explicit error (no downgrade)", w3b),
     ("W04 temp file is complete before the publish action", w04),
     ("W07 init never uses an os.replace fallback", w07),
     ("W08 complete current entry is usable", w08),

@@ -1,12 +1,12 @@
 {
   "suite": "project-protocol v1.0.4 B01/B02 regression",
-  "cases": 21,
-  "passed": 21,
+  "cases": 22,
+  "passed": 22,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 21.57,
+  "elapsed_seconds": 23.33,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "726CC19F35E5911377D84ED51CF839C232E20392F7780D9D05B732A2C7577CB3",
+  "script_sha256": "12DC7E880A75541BBCA884FDC355F745BC02FF45BC921136BB66D25F8DD4422F",
   "python": "3.13.14",
   "platform_verified": "Windows-11-10.0.26200-SP0",
   "platforms_not_verified": [
@@ -46,7 +46,15 @@
       }
     },
     {
-      "name": "W03 unsupported atomic primitive errors, no downgrade",
+      "name": "W03 hardlink unsupported -> O_EXCL fallback publishes (no replace)",
+      "ok": true,
+      "detail": {
+        "init_rc": 0,
+        "replace_calls": 0
+      }
+    },
+    {
+      "name": "W3b hardlink AND O_EXCL both unsupported -> explicit error (no downgrade)",
       "ok": true,
       "detail": {
         "init_rc": 2,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""project-protocol v1.0.4 deterministic helper: init / add / tail / check.
+"""project-protocol v1.1.0 deterministic helper: init / add / tail / check / handoff / resume.
 
 Pure Python standard library, offline, no third-party dependency.
 
@@ -11,8 +11,11 @@ Division of labour:
 Implemented guarantees:
   * init writes into a non-existent or EMPTY directory only; preflight is
     zero-write. AGENTS.md is published last from a fully flushed/fsynced temp
-    file via an ATOMIC NO-CLOBBER hard link (os.link): a competing AGENTS.md
-    created after preflight makes init fail with their bytes preserved.
+    file via ATOMIC NO-CLOBBER publish: os.link() on filesystems with hardlink
+    support, O_EXCL | O_CREAT copy as fallback for those without (EOPNOTSUP /
+    ENOSYS). A competing AGENTS.md created after preflight makes init fail
+    with their bytes preserved. No os.replace is ever used because it would
+    clobber a competing writer.
   * completion detection selects rules by EXPLICIT version identity. A current
     entry must carry a body-bound completion marker; truncated current entries
     are rejected and never fall back to the legacy heuristic. Complete v1.0.2 /
@@ -28,6 +31,13 @@ Implemented guarantees:
     with exit codes 0 / 1 / 2, applies an output budget without hiding negative
     records from --strict, and treats any idea-frontmatter parse failure as an
     explicit error (never a silent CLEAN).
+  * handoff generates a HANDOFF-YYYYMMDD-HHMMSS.md snapshot via an atomic
+    no-clobber write (O_EXCL | O_CREAT open then copy+fsync), never overwrites
+    an existing card, and reads the latest WIP that has not been superseded by
+    a later DONE / DECIDED entry.
+  * resume prints a cold-start handoff package with line / byte accounting and
+    enforces an output budget by ACTUAL LINES (not list elements) so
+    card_text / l1 multi-line strings count correctly.
   * all text reads accept an optional UTF-8 BOM (utf-8-sig); historical file
     bodies are never rewritten to achieve that compatibility.
 
@@ -622,35 +632,97 @@ class PublishUnsupported(Exception):
     """This platform/filesystem cannot provide atomic no-clobber publish."""
 
 
-def publish_completion(tmp, target):
+def _publish_via_oexcl_copy(tmp, target):
+    """Fallback for filesystems without hardlink support.
+
+    Opens target with O_EXCL | O_CREAT: the OS itself atomically guarantees
+    the target did not exist at the moment of open. On Windows the target
+    fd must be opened with O_BINARY because Windows opens os.open fds in
+    text mode by default, which translates every \n to \r\n on write and
+    would corrupt the published bytes. Bytes are then copied from tmp into
+    the freshly created fd, fsync, close. This never clobbers a competing
+    target: if another writer creates target between preflight and our
+    open, the OS returns EEXIST and we raise PublishConflict.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    # Windows opens os.open fds in text mode; disable \n -> \r\n translation.
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    try:
+        fd = os.open(str(target), flags, 0o644)
+    except FileExistsError as exc:
+        raise PublishConflict(
+            "发布时目标已由其他写者创建；O_EXCL 独占创建被拒绝") from exc
+    except OSError as exc:
+        raise PublishUnsupported(
+            "当前平台/文件系统不支持原子无覆盖发布（O_EXCL 失败：%r）；"
+            "不会降级为可能覆盖目标的 os.replace" % (exc,)) from exc
+    try:
+        try:
+            src_fd = os.open(str(tmp), os.O_RDONLY)
+        except OSError as exc:
+            raise PublishUnsupported(
+                "O_EXCL 发布后无法读取暂存文件：%r" % (exc,)) from exc
+        try:
+            # os.write can short-write on some platforms; loop until full chunk
+            # is drained. Both fds are raw (os.open, not buffered Python files)
+            # so no bytes can be missed between the two.
+            while True:
+                chunk = os.read(src_fd, 65536)
+                if not chunk:
+                    break
+                written = 0
+                while written < len(chunk):
+                    written += os.write(fd, memoryview(chunk)[written:])
+        finally:
+            os.close(src_fd)
+        os.fsync(fd)
+    except OSError as exc:
+        raise PublishUnsupported(
+            "O_EXCL 发布后写入失败：%r" % (exc,)) from exc
+    os.close(fd)
+
+
+def publish_completion(tmp, target, label="AGENTS.md 完成入口"):
     """Atomically publish a fully written temp file ONLY IF target is absent.
 
-    os.link() is atomic and never overwrites: when the target already exists it
-    raises FileExistsError instead of replacing bytes. A private init lock is
-    NOT a solution, because the competing writer does not obey our lock. There
-    is deliberately NO os.replace fallback: any replace could clobber the
-    target (audit finding P1/B02).
+    Two paths, never clobber:
+    * os.link(): atomic no-clobber hard link on filesystems with hardlink support.
+    * O_EXCL | O_CREAT: fallback for filesystems without hardlink support
+      (EOPNOTSUP / ENOSYS from os.link). The OS itself guarantees the target
+      did not exist at open time; we copy bytes + fsync + close. No os.replace
+      is ever used in any path because it would clobber a competing writer.
+
+    `label` names the thing being published so conflict/verification messages
+    are accurate whether the caller is init (AGENTS.md) or handoff (a card).
     """
     try:
         os.link(str(tmp), str(target))
     except FileExistsError as exc:
         raise PublishConflict(
-            "发布时 AGENTS.md 已由其他写者创建；原子无覆盖发布被拒绝") from exc
+            "发布时 %s 已由其他写者创建；原子无覆盖发布被拒绝" % label) from exc
     except OSError as exc:
         # Windows CreateHardLink reports winerror 183 when the link exists.
         if getattr(exc, "winerror", None) == 183 or exc.errno == errno.EEXIST:
             raise PublishConflict(
-                "发布时 AGENTS.md 已由其他写者创建；原子无覆盖发布被拒绝") from exc
-        raise PublishUnsupported(
-            "当前平台/文件系统不支持原子无覆盖发布（os.link 失败：%r）；"
-            "不会降级为可能覆盖目标的 os.replace" % (exc,)) from exc
-    # The hard link is the SAME inode. Verify the published bytes still equal
-    # the fully written temp content before removing the temporary name.
+                "发布时 %s 已由其他写者创建；原子无覆盖发布被拒绝" % label) from exc
+        # Windows reports this as EOPNOTSUPP (10045); POSIX may use EOPNOTSUP.
+        op_errs = {errno.ENOSYS, errno.EOPNOTSUPP}
+        op_errs.discard(getattr(errno, "EOPNOTSUP", None))
+        if exc.errno not in op_errs:
+            raise PublishUnsupported(
+                "当前平台/文件系统不支持原子无覆盖发布（os.link 失败：%r）；"
+                "不会降级为可能覆盖目标的 os.replace" % (exc,)) from exc
+        # Hardlink unsupported; fall back to O_EXCL | O_CREAT copy.
+        _publish_via_oexcl_copy(tmp, target)
+    # The published bytes must equal the fully written temp content before
+    # removing the temporary name (both paths: hard link is same inode,
+    # O_EXCL copy is byte-for-byte copy).
     try:
         if target.read_bytes() != tmp.read_bytes():
-            raise PublishUnsupported("发布后的 AGENTS.md 与暂存文件内容不一致")
+            raise PublishUnsupported("发布后的 %s 与暂存文件内容不一致" % label)
     except OSError as exc:
-        raise PublishUnsupported("发布后无法核对 AGENTS.md 内容：%r" % (exc,)) from exc
+        raise PublishUnsupported("发布后无法核对 %s 内容：%r" % (label, exc)) from exc
     try:
         os.unlink(str(tmp))
     except OSError as exc:
@@ -1136,7 +1208,7 @@ def _latest_handoff(root):
 
 
 def _handoff_card_name():
-    return "HANDOFF-%s.md" % datetime.now().strftime("%Y%m%d-%H%M")
+    return "HANDOFF-%s.md" % datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 def cmd_handoff(args):
@@ -1167,10 +1239,17 @@ def cmd_handoff(args):
     negs = negs[-args.limit_negative:]
 
     wip_line = None
-    for ln in reversed(lines):
-        if _log_status(ln) == "WIP":
-            wip_line = ln
-            break
+    # Scan from the end; skip WIP entries that have been superseded by a
+    # later DONE or DECIDED entry (i.e. the work was completed after the WIP).
+    for wip_idx in range(len(lines) - 1, -1, -1):
+        if _log_status(lines[wip_idx]) == "WIP":
+            has_superseding = any(
+                _log_status(lines[j]) in ("DONE", "DECIDED")
+                for j in range(wip_idx + 1, len(lines))
+            )
+            if not has_superseding:
+                wip_line = lines[wip_idx]
+                break
     next_cmd = _log_next_command(wip_line) if wip_line else None
 
     prev = _latest_handoff(root)
@@ -1202,17 +1281,28 @@ def cmd_handoff(args):
     text = "\n".join(lines_body) + "\n"
 
     card_path = root / HANDOFF_DIR / _handoff_card_name()
-    # x 模式：绝不覆盖任何已存在的文件；同名即冲突即停（诚实报错）
+    # Atomic no-clobber: write to a temp file first, then publish via
+    # os.link / O_EXCL fallback. Same pattern as init's AGENTS.md publish,
+    # so a half-written card can never appear at the final path.
+    tmp_card = root / HANDOFF_DIR / (card_path.name + ".tmp")
     try:
-        with card_path.open("x", encoding="utf-8", newline="\n") as f:
+        with tmp_card.open("x", encoding="utf-8", newline="\n") as f:
             f.write(text)
             f.flush()
             os.fsync(f.fileno())
     except FileExistsError:
-        die("交接卡片已存在：%s（不覆盖任何文件；如需新卡片请等下一分钟或手工处理）"
-            % card_path.relative_to(root).as_posix())
+        die("交接卡片临时文件已存在：%s（不覆盖任何文件；如需新卡片请等下 1 秒或手工处理）"
+            % tmp_card.relative_to(root).as_posix())
     except OSError as exc:
-        die("写入交接卡片失败：%r" % (exc,))
+        die("写入交接卡片临时文件失败：%r" % (exc,))
+    try:
+        publish_completion(tmp_card, card_path)
+    except PublishConflict as exc:
+        die("%s；如需新卡片请等下 1 秒或手工处理" % (exc,))
+    except PublishUnsupported as exc:
+        die("交接卡片无法原子发布：%r" % (exc,))
+    except Exception as exc:
+        die("发布交接卡片失败：%r" % (exc,))
 
     print("HANDOFF OK | %s | %d 字节 | sha256 %s" % (
         card_path.relative_to(root).as_posix(),
@@ -1233,7 +1323,9 @@ def cmd_resume(args):
         die("读取协议文件失败：%r" % (exc,))
     l1_lines = split_log_lines(l1)
     l0_lines_all = _collect_log_lines(l0)
-    l0_tail = l0_lines_all[-args.lines:]
+    # --lines 0 must yield ZERO tail lines; Python -0 == 0 would return the
+    # entire list, so handle the zero case explicitly.
+    l0_tail = [] if args.lines == 0 else l0_lines_all[-args.lines:]
     card = _latest_handoff(root)
     card_text = None
     if card is not None:
@@ -1288,17 +1380,22 @@ def cmd_resume(args):
     budget_lines = args.max_lines
     budget_bytes = args.max_bytes
     shown, used, truncated = 0, 0, False
-    for idx, ln in enumerate(out):
-        if shown >= budget_lines:
-            truncated = True
+    # Count ACTUAL OUTPUT LINES, not list elements: card_text and l1 are
+    # multi-line string elements that the old code counted as 1 entry each.
+    for element in out:
+        for physical_line in element.split("\n"):
+            if shown >= budget_lines:
+                truncated = True
+                break
+            encoded = (physical_line + "\n").encode("utf-8")
+            if used + len(encoded) > budget_bytes:
+                truncated = True
+                break
+            sys.stdout.write(physical_line + "\n")
+            used += len(encoded)
+            shown += 1
+        if truncated:
             break
-        encoded = (ln + "\n").encode("utf-8")
-        if used + len(encoded) > budget_bytes:
-            truncated = True
-            break
-        sys.stdout.write(ln + "\n")
-        used += len(encoded)
-        shown += 1
     if truncated:
         sys.stdout.write(
             "... resume 输出已达预算（%d 行 / %d 字节）：请改用 "
@@ -1337,7 +1434,8 @@ def main():
     a.add_argument("--path", default="-",
                    help="产物相对路径；禁盘符绝对路径/POSIX 绝对路径/家目录/..；"
                         "反斜杠统一规范化为 /。只是日志引用，不会打开该路径。无则 -")
-    a.add_argument("--next", dest="next", default="-", help="下一步；无则 -")
+    a.add_argument("--next", dest="next", default="-",
+                   help="下一步内容（脚本会自动加 NEXT 前缀；无需自行写 NEXT；无则 -）")
     a.add_argument("--root", help="项目根目录，缺省为当前目录")
     a.add_argument("--lock-timeout", type=finite_positive_float,
                    default=DEFAULT_LOCK_TIMEOUT,
@@ -1369,8 +1467,8 @@ def main():
     c.add_argument("--root")
     c.set_defaults(func=cmd_check)
 
-    handoff_help = ("生成一页 HANDOFF-YYYYMMDD-HHMM.md 交接快照（只读 L0/L1，不改动协议事实源）；"
-                    "同名即冲突即停，不覆盖任何文件；下一分钟可再生成，历史卡片永不覆盖")
+    handoff_help = ("生成一页 HANDOFF-YYYYMMDD-HHMMSS.md 交接快照（只读 L0/L1，不改动协议事实源）；"
+                    "同名即冲突即停，不覆盖任何文件；相差一秒即可再次生成，历史卡片永不覆盖")
     h = sub.add_parser("handoff", help=handoff_help, description=handoff_help)
     h.add_argument("--root", help="项目根目录，缺省为当前目录")
     h.add_argument("--by", default=None, help="生成者（人或 agent 名）；缺省 -")

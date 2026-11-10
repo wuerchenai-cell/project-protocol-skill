@@ -28,18 +28,22 @@ AI-agnostic 的项目交接协议 skill（**v1.1.0，模板 v1.8.0**）。给 AI
 
 ```bash
 # 新项目开工（仅限空目录，非空老项目一律拒绝、零写入）
-python progress.py init
+python progress.py init ./my-project
 
 # 每完成一个可验证节点
-python progress.py add "DONE | T01 | 结论 | 产物路径 | NEXT 下一步"
+python progress.py add --root ./my-project \
+  --status DONE --tid T01 \
+  --text "完成基础架构" \
+  --path "04_成果/T01/交付" \
+  --next "开始接口测试"
 
 # 冷启动/接手
-python progress.py tail --lines 30
-python progress.py check
+python progress.py tail --root ./my-project --lines 30
+python progress.py check --root ./my-project "基础架构" --strict
 
 # v1.1.0 换 AI 交接
-python progress.py handoff --by <身份>   # 交班前留快照
-python progress.py resume --lines 30     # 接班时一次性冷启动
+python progress.py handoff --root ./my-project --by <身份>   # 交班前留快照
+python progress.py resume --root ./my-project --lines 30     # 接班时一次性冷启动
 ```
 
 ## 版本与状态

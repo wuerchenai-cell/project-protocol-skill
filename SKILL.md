@@ -120,7 +120,10 @@ agent 反复 `tail` / 全盘读的开销，也避免它重复别人踩过的否�
 - [2026-11-06 18:50] WIP | T01 | 正在逐页导出 PNG | - | NEXT 跑 Slide.Export 抽检第 3 页
 ```
 
-- 状态：`DONE` / `DECIDED` / `REJECTED` / `BLOCKED` / `WIP`；想法另用 `PROPOSED` / `ADOPTED` / `REJECTED`。全大写英文。
+- 状态值（`--status` 接受全部 7 个，全大写英文）：
+  - 任务完成/决策：`DONE` / `DECIDED` / `REJECTED` / `BLOCKED` / `WIP`
+  - 想法状态（`PROPOSED` / `ADOPTED`）：用于新想法的登记与转化；想法文件 frontmatter 用 `PROPOSED` / `ADOPTED` / `REJECTED`
+  - 简记：任务进展用前 5 个，想法登记用后 2 个（想法 `REJECTED` 与任务 `REJECTED` 共用）
 - 时间戳 `YYYY-MM-DD HH:mm`，本地时间，不写时区。
 - 任务 id **只用 ASCII 数字**：`T01`–`T99`，超过 99 个任务后继续 `T100`、`T101`…；拒绝 `T00`、`T1`、`T010`、全角数字与带前后缀的编号。历史日志保持可读。
 - 版本一律 `vNN`；禁「最终版 / 第 N 版 / 终极版 / R1 / v0.1」。
@@ -177,6 +180,8 @@ python progress.py handoff [--by 生成者] [--tail-lines 30]   # 换 agent 前�
 python progress.py resume [--lines 30] [--max-lines N] [--max-bytes N]  # 接班冷启动（v1.1.0）
 python progress.py --help
 ```
+
+> **关于 `--next` 前缀**：日志行的第五段写入的是 `NEXT 下一步`，脚本在 `add` 时会**自动加 `NEXT ` 前缀**，所以你给 `--next` 的值只需写「下一步」内容本身（比如 `--next "抽检第 3 页"`），不要自己再写「NEXT」，否则会重复成 `NEXT NEXT xxx`。
 
 并发说明见第 3 节铁律 4。`--lock-timeout` 控制等待写锁的秒数，**必须是有限正数**：
 `nan` / `inf` / `-inf` / `0` / 负数 / 非数字一律在打开锁文件前被拒绝并返回参数错误；

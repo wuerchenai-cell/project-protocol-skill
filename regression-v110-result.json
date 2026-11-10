@@ -4,9 +4,9 @@
   "passed": 12,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 13.47,
+  "elapsed_seconds": 16.11,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "726CC19F35E5911377D84ED51CF839C232E20392F7780D9D05B732A2C7577CB3",
+  "script_sha256": "12DC7E880A75541BBCA884FDC355F745BC02FF45BC921136BB66D25F8DD4422F",
   "python": "3.13.14",
   "platform_verified": "Windows-11-10.0.26200-SP0",
   "platforms_not_verified": [
@@ -25,7 +25,7 @@
       "name": "A01 handoff emits a HANDOFF card with required sections",
       "ok": true,
       "detail": {
-        "card": "HANDOFF-20261109-2109.md",
+        "card": "HANDOFF-20261110-151341.md",
         "card_bytes": 1078
       }
     },
@@ -33,7 +33,7 @@
       "name": "A02 handoff card binds goal/wip/negative from L0 + L1",
       "ok": true,
       "detail": {
-        "card": "06_记忆/HANDOFF-20261109-2109.md",
+        "card": "06_记忆/HANDOFF-20261110-151342.md",
         "next_section": "progress.py resume --lines 10"
       }
     },
@@ -41,23 +41,23 @@
       "name": "A03 handoff card path single-sited, no %-placeholder",
       "ok": true,
       "detail": {
-        "card": "06_记忆/HANDOFF-20261109-2109.md"
+        "card": "06_记忆/HANDOFF-20261110-151343.md"
       }
     },
     {
       "name": "A04 handoff opens card exclusively (x), never overwrites",
       "ok": true,
       "detail": {
-        "card": "06_记忆/HANDOFF-20261109-1230.md",
+        "card": "06_记忆/HANDOFF-20261109-123000.md",
         "rival_bytes": 68,
-        "stderr": "ERROR: 交接卡片已存在：06_记忆/HANDOFF-20261109-1230.md（不覆盖任何文件；如需新卡片请等下一分钟或手工处理）\n"
+        "stderr": "ERROR: 发布时 AGENTS.md 完成入口 已由其他写者创建；原子无覆盖发布被拒绝；如需新卡片请等下 1 秒或手工处理\n"
       }
     },
     {
       "name": "A05 resume prints a bounded cold-start package",
       "ok": true,
       "detail": {
-        "stdout_bytes": 2289
+        "stdout_bytes": 2291
       }
     },
     {
