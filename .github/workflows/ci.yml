@@ -1,0 +1,91 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least-privilege: read-only checkout. No secrets needed; never use
+# pull_request_target to run untrusted fork PR code.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: regression (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    env:
+      PP_WORK: ${{ runner.temp }}/pp-work
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Show interpreter + platform
+        run: python -c "import sys,platform; print(sys.version); print(platform.platform())"
+
+      - name: init scratch dirs (outside the checkout)
+        run: mkdir -p "$PP_WORK"
+        shell: bash
+
+      # ---- base: locking / concurrency ----
+      - name: base regression
+        run: >
+          python regression_tests.py
+          --script progress.py
+          --out "$PP_WORK/regression-base-result.json"
+          --workdir "$PP_WORK/base"
+          --rounds 10
+
+      # ---- v103: version compatibility ----
+      - name: v103 regression
+        run: >
+          python regression_tests_v103.py
+          --script progress.py
+          --out "$PP_WORK/regression-v103-result.json"
+          --workdir "$PP_WORK/v103"
+
+      # ---- v104: init atomic publish ----
+      - name: v104 regression
+        run: >
+          python regression_tests_v104.py
+          --script progress.py
+          --out "$PP_WORK/regression-v104-result.json"
+          --workdir "$PP_WORK/v104"
+
+      # ---- v110: handoff / resume ----
+      - name: v110 regression
+        run: >
+          python regression_tests_v110.py
+          --script progress.py
+          --out "$PP_WORK/regression-v110-result.json"
+          --workdir "$PP_WORK/v110"
+
+      # ---- independent acceptance (self-cleans fixtures) ----
+      - name: independent acceptance v104
+        shell: bash
+        env:
+          PP_RESULTS: ${{ runner.temp }}/pp-work/independent-results-v104.json
+          PP_FIXTURES: ${{ runner.temp }}/pp-work/fixtures
+        run: python independent_acceptance_v104.py
+
+      - name: publish results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-results-${{ matrix.os }}
+          path: ${{ runner.temp }}/pp-work/
+          if-no-files-found: ignore
+          retention-days: 14
