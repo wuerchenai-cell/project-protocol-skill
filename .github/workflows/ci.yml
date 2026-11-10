@@ -36,6 +36,25 @@ jobs:
       - name: Show interpreter + platform
         run: python -c "import sys,platform; print(sys.version); print(platform.platform())"
 
+      # -- SKILL.md word budget gate (first added 2026-11-10, v1.1.0+) --
+      # Budget: <2050 words. Counting convention (documented, DECISION):
+      #   "words" = whitespace-separated tokens, the standard word-counting
+      #   rule for prose (what a reader / tokenizer would naturally call a word).
+      #   CJK is NOT split char-by-char; that would inflate the count ~3.8x and
+      #   is not how a readable skill's "size budget" is normally judged.
+      #   The CJK char count is printed only for transparency, not for gating.
+      #   If the host ever needs char-based gating, revisit here + behavior.
+      - name: SKILL.md budget gate
+        run: |
+          python - <<'PY'
+          import pathlib
+          t = pathlib.Path('SKILL.md').read_text(encoding='utf-8')
+          words = len(t.split())
+          cjk = sum(1 for c in t if '一' <= c <= '鿿' or '㐀' <= c <= '䶿')
+          print(f"SKILL.md: words={words} (<{2050}) cjk_chars={cjk} chars={len(t)}")
+          assert words <= 2050, f"SKILL.md over word budget: {words} > 2050"
+          PY
+
       - name: init scratch dirs (outside the checkout)
         run: mkdir -p "$PP_WORK"
         shell: bash
