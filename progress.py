@@ -751,7 +751,16 @@ def _publish_via_oexcl_copy(tmp, target):
         try:
             src_fd = os.open(str(tmp), os.O_RDONLY | binary)
         except OSError as exc:
+            # We created target ourselves with O_EXCL, so on any failure before
+            # the copy completes it must be removed -- otherwise a zero-byte
+            # AGENTS.md / handoff card would survive and a later run would
+            # treat the truncated entry as a valid completion. Same contract
+            # as the partial-copy cleanup below.
             _safe_close(fd)
+            try:
+                os.unlink(str(target))
+            except OSError:
+                pass
             raise PublishUnsupported(
                 "O_EXCL 发布后无法读取暂存文件：%r" % (exc,)) from exc
         try:
@@ -1063,7 +1072,16 @@ def cmd_add(args):
                         print(line)
                         print("ADD DUP | %s | 未追加重复记录" % dedupe_key)
                         return
-                elif size > 0:
+                # Newline repair must run for EVERY non-duplicate append,
+                # including when the file is LARGER than this line. The old
+                # `elif` only repaired the "file shorter than this line" case,
+                # so a long last record with a missing final newline followed
+                # by a short new record had no separator written: the two
+                # records were physically joined into one line and the new
+                # record's status/fields became invisible to every reader
+                # (split_log_lines). One `add` must always yield exactly one
+                # complete, independently parseable record.
+                if size > 0:
                     f.seek(-1, os.SEEK_END)
                     last_byte = f.read(1)
                     if last_byte not in (b"\n", b"\r"):
@@ -1452,9 +1470,15 @@ def cmd_handoff(args):
     tail_has_neg = any(_log_status(ln) in NEGATIVE for ln in tail)
     lines_body += ["", "## 已否决 / 已阻塞（防重复劳动，全量最近 %d 条）" % args.limit_negative]
     lines_body += [ln for ln in card_negs] if card_negs else ["-"]
-    if not tail_has_neg:
+    if card_negs and not tail_has_neg:
+        # Older-but-still-valid rejections were surfaced above; say why they
+        # are outside the tail window instead of implying nothing was found.
         lines_body += ["", "（注：L0 末尾 %d 行内无已否决/阻塞记录；"
                        "上方为更早的记录，仍适用。）" % args.tail_lines]
+    elif not card_negs and args.limit_negative > 0:
+        # Nothing negative anywhere in the log: state that positively rather
+        # than leaving a bare "-" that reads like an incomplete query.
+        lines_body += ["", "（注：L0 中暂无已否决/阻塞记录；无需防重复劳动约束。）"]
     # The card always carries the RAW L1 "下一步" text, so the next agent sees
     # the authoritative plan even if no WIP line is in effect.
     lines_body += ["", "## 下一步（优先执行）"]
@@ -1561,7 +1585,11 @@ def cmd_resume(args):
     out.append("=== 先读这里：L1「下一步」（权威，按此执行）===")
     out.append(secs.get("下一步", "").strip() or "-（L1「下一步」节为空；请先补齐再开工）")
     out.append("")
-    for sec_name in ("决策", "当前目标", "进行中(WIP)"):
+    # L1_STATE.md has a FIXED six-section shape (see _extract_l1_sections):
+    # 当前目标 / 已完成 / 已否决 / 进行中(WIP) / 下一步 / 关键决策索引.
+    # "决策" is not one of them, so naming it here printed a permanently
+    # empty block and hid the real decision index.
+    for sec_name in ("关键决策索引", "当前目标", "进行中(WIP)"):
         body = secs.get(sec_name, "").strip()
         out.append("=== L1「%s」===" % sec_name)
         out.append(body if body else "-（L1 该节为空）")
@@ -1687,10 +1715,10 @@ def main():
     c.add_argument("--strict", action="store_true",
                    help="把 REJECTED 想法也计入判定；命中否决返回 1；"
                         "判定依据全部命中，不受输出预算影响")
-    c.add_argument("--max-lines", type=int, default=DEFAULT_MAX_LINES,
-                   help="最多输出多少条命中（默认 40；0 表示只给统计）")
-    c.add_argument("--max-bytes", type=int, default=DEFAULT_MAX_BYTES,
-                   help="命中输出字节预算（默认 8192）")
+    c.add_argument("--max-lines", type=non_negative_int, default=DEFAULT_MAX_LINES,
+                   help="最多输出多少条命中（默认 40；0 表示只给统计；负数报错）")
+    c.add_argument("--max-bytes", type=non_negative_int, default=DEFAULT_MAX_BYTES,
+                   help="命中输出字节预算（默认 8192；负数报错）")
     c.add_argument("--root")
     c.set_defaults(func=cmd_check)
 

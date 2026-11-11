@@ -271,7 +271,7 @@ conclusion: 分层记忆适合状态类文件，不适合产出物分类
 
 **`HANDOFF` 卡片格式**（v1.8.0 新增；文件名 `06_记忆/HANDOFF-YYYYMMDD-HHMMSS.md`，秒级粒度；只读快照，**不是事实源**）
 
-由 `progress.py handoff --by <生成者>` 生成，`progress.py resume` 读取。内容是 L1 六节 + L0 末尾若干行的**固化视图**，供下一个 agent 冷启动。
+由 `progress.py handoff --by <生成者>` 生成，`progress.py resume` 读取。内容是 L1 的当前目标/进行中/下一步 + L0 末尾若干行的**固化视图**，供下一个 agent 冷启动。
 
 ```markdown
 # HANDOFF 交接快照
@@ -295,7 +295,7 @@ conclusion: 分层记忆适合状态类文件，不适合产出物分类
 <上一条 WIP 行的 NEXT 命令；若无 WIP 行则见 L1「下一步」节>
 ## 交接给下一 agent 的行动清单
 1. 读 06_记忆/L1_STATE.md 全文（唯一权威；本卡片由脚本按快照方式生成，不是事实源）。
-2. 跑 progress.py resume（打印本卡片 + L0 末尾 N 行 + 已否决清单）。
+2. 跑 progress.py resume（先读 L1「下一步」与「关键决策索引」/「当前目标」/「进行中(WIP)」，再打印本卡片 + 已否决清单 + L1 全文 + L0 末尾 N 行）。
 3. 按 L1「下一步」执行；动手前先 progress.py check --strict "关键词" 防重复劳动。
 4. 会话结束或换 agent 前，再跑 progress.py handoff，得到下一份快照。
 ```
@@ -321,7 +321,7 @@ conclusion: 分层记忆适合状态类文件，不适合产出物分类
 - **B 分时**：同一 agent 白天/晚上在不同时段继续，等同新会话冷启动；
 - **C 分工**：多个 agent 接同一项目不同任务，交接时 `check --strict "关键词"` 确认自己的任务没被否决。
 
-**零包袱（硬要求）**：`handoff` 前必须先 `add` 留 WIP 行（否则 `resume` 拿不到 NEXT 命令），因为 `resume` 的 NEXT 来自 L0 的 WIP。
+**零包袱**：`handoff` 不依赖 L0 里有 WIP 行——卡片与 `resume` 都把 L1「下一步」原文放在权威位置，没有 WIP 也能完成交接；有 WIP 行时会额外附上它的 NEXT 命令，便于直接执行。
 
 ## 十一、来源与未核实
 

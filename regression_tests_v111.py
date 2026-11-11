@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""project-protocol v1.1.0+ review regression suite (v111).
+"""project-protocol v1.1.0 review regression suite (v111).
 
 Covers the eight behaviours introduced by the post-v1.1.0 review batch, all of
 which are deterministic and offline. Every case runs on an isolated temporary
@@ -16,6 +16,8 @@ Scope:
   N06  a 16-byte / UTF-16 / UTF-32 / raw-NUL binary fixture is rejected, not poisoned
   N07  CJK survives the cp1252-capable subprocess pipe (utf-8 reconfigure)
   N08  handoff reads L0/L1 without taking the write lock (no deadlock under lock)
+  N09  a long last record with no final newline is never merged into the next one
+  N10  resume prints the real L1 section 关键决策索引 (never a phantom 决策 block)
 
 No assertion of the earlier v1.0.2 / v1.0.3 / v1.0.4 / v1.1.0 suites was
 weakened; those suites still run and must still pass independently.
@@ -411,6 +413,63 @@ def n08(s):
     return {"handoff_rc_while_locked": 0, "holder_killed": holder.returncode}
 
 
+# ---------------------------------------------------------------------------
+# N09 : a long last record with no final newline must not absorb the next one
+# ---------------------------------------------------------------------------
+def n09(s):
+    """Newline repair runs for every non-duplicate append, even when the file
+    is LARGER than the incoming record (the old `elif` skipped that case and
+    physically merged two records into one unparseable line)."""
+    p = s.init("newline-repair")
+    # 200 chars is the clean_field cap; the whole record is ~240 bytes, far
+    # longer than the ~60-byte record we append next.
+    long_text = "L" * 200
+    s.seed(p, tid="T01", text=long_text)
+    lp = p / "06_记忆" / "L0_LOG.md"
+    data = lp.read_bytes()
+    assert data.endswith(b"\n"), "seed should end with a newline"
+    lp.write_bytes(data[:-1])            # simulate a truncated final newline
+    assert not lp.read_bytes().endswith(b"\n")
+    r = s.cli("add", "--root", str(p), "--status", "DONE", "--tid", "T02",
+              "--text", "short-new-record")
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+    text = lp.read_text(encoding="utf-8")
+    phys = text.split("\n")
+    merged = [ln for ln in phys if "short-new-record" in ln and long_text[:12] in ln]
+    assert not merged, "two records were physically merged: %r" % merged[:1]
+    hits = [ln for ln in phys if "short-new-record" in ln]
+    assert len(hits) == 1, hits
+    assert "| T02 |" in hits[0], hits[0][:DETAIL_CHARS]
+    # Reader side: the new record is one independent, parseable line.
+    parsed = s.mod.split_log_lines(text)
+    parsed_hits = [ln for ln in parsed if "short-new-record" in ln]
+    assert len(parsed_hits) == 1, parsed_hits
+    assert "| T02 |" in parsed_hits[0], parsed_hits[0][:DETAIL_CHARS]
+    return {"physical_lines": len(phys), "new_record_independent": True,
+            "long_record_intact": any(long_text in ln for ln in phys)}
+
+
+# ---------------------------------------------------------------------------
+# N10 : resume names the REAL L1 section 关键决策索引 (not the absent 决策)
+# ---------------------------------------------------------------------------
+def n10(s):
+    """resume prints a non-empty 关键决策索引 block and never a phantom 决策 block."""
+    p = s.init("resume-l1-sections")
+    s.seed(p, text="section-probe")
+    lp = p / "06_记忆" / "L1_STATE.md"
+    t = lp.read_text(encoding="utf-8")
+    assert "## 关键决策索引" in t, "L1 template missing the decision-index section"
+    t = t.replace("## 关键决策索引\n\n", "## 关键决策索引\n\nDECISION-PROBE\n\n", 1)
+    lp.write_text(t, encoding="utf-8")
+    r = s.cli("resume", "--root", str(p))
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+    assert "=== L1「关键决策索引」===" in r.stdout, r.stdout[:DETAIL_CHARS]
+    assert "=== L1「决策」===" not in r.stdout, "phantom section printed"
+    assert "DECISION-PROBE" in r.stdout, "decision-index body was not shown"
+    return {"section_named": "关键决策索引",
+            "body_visible": "DECISION-PROBE" in r.stdout}
+
+
 CASES = [
     ("N01a tail --lines 0/negative semantics", n01a),
     ("N01b resume --lines 0/negative semantics", n01b),
@@ -426,6 +485,8 @@ CASES = [
     ("N06 binary fixtures rejected, not poisoned", n06),
     ("N07 CJK survives the cp1252 subprocess pipe", n07),
     ("N08 handoff reads without the write lock", n08),
+    ("N09 long unterminated last line stays separate", n09),
+    ("N10 resume prints the real L1 decision-index section", n10),
 ]
 
 
@@ -445,7 +506,7 @@ def main():
         s.case(name, fn)
     passed = sum(r["ok"] for r in s.results)
     report = {
-        "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁)",
+        "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名)",
         "cases": len(s.results),
         "passed": passed,
         "failed": len(s.results) - passed,

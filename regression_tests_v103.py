@@ -755,7 +755,7 @@ def main():
     result = {
         "suite": "project-protocol v1.0.3 7-fix regression",
         "script_under_test": str(s.script),
-        "script_sha256": hashlib.sha256(s.script.read_bytes()).hexdigest(),
+        "script_sha256": hashlib.sha256(s.script.read_bytes()).hexdigest().upper(),
         "python": sys.version.split()[0],
         "platform_verified": platform.system() + " " + platform.release(),
         "platforms_not_verified": [x for x in ("Windows", "Linux", "Darwin")

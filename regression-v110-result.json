@@ -4,9 +4,9 @@
   "passed": 12,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 12.3,
+  "elapsed_seconds": 16.32,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "C1645F9BF1401D47383F32F40B7374C2279CAA8EAF22BB81C2B1B63A3A870317",
+  "script_sha256": "641DCEE82146E7E3E1AF8CBCA457AA1B40D266E23E49D74FAC315BCDA561FBBD",
   "python": "3.13.14",
   "platform_verified": "Windows-11-10.0.26200-SP0",
   "platforms_not_verified": [
@@ -25,15 +25,15 @@
       "name": "A01 handoff emits a HANDOFF card with required sections",
       "ok": true,
       "detail": {
-        "card": "HANDOFF-20261111-103429.md",
-        "card_bytes": 1158
+        "card": "HANDOFF-20261111-140548.md",
+        "card_bytes": 1139
       }
     },
     {
       "name": "A02 handoff card binds goal/wip/negative from L0 + L1",
       "ok": true,
       "detail": {
-        "card": "06_记忆/HANDOFF-20261111-103430.md",
+        "card": "06_记忆/HANDOFF-20261111-140549.md",
         "next_section": "从最近 WIP：progress.py resume --lines 10\nL1「下一步」原文：\n-"
       }
     },
@@ -41,7 +41,7 @@
       "name": "A03 handoff card path single-sited, no %-placeholder",
       "ok": true,
       "detail": {
-        "card": "06_记忆/HANDOFF-20261111-103431.md"
+        "card": "06_记忆/HANDOFF-20261111-140550.md"
       }
     },
     {
@@ -57,7 +57,7 @@
       "name": "A05 resume prints a bounded cold-start package",
       "ok": true,
       "detail": {
-        "stdout_bytes": 2662
+        "stdout_bytes": 2685
       }
     },
     {
