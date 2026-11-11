@@ -258,7 +258,7 @@ def a06(s):
     assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
     out = r.stdout
     assert "无清算" not in out  # sanity: not the no-protocol error path
-    # v1.1.1+: the empty negative block is reported positively, and the L1
+    # v1.1.0 审计批次: the empty negative block is reported positively, and the L1
     # "下一步" section is guaranteed to appear (L1-before-card ordering).
     assert "（L0 无）" in out, "expected an empty negative block, got %s" % out[:DETAIL_CHARS]
     assert "L1「下一步」" in out, "resume must lead with the authoritative next step"
@@ -274,7 +274,7 @@ def a07(s):
               "--text", "budget-token-%d" % i)
     r = s.cli("resume", "--root", str(p), "--max-lines", "5",
               "--max-bytes", "100000")
-    # v1.1.1+: a truncated resume is NOT a success. Exit 3 signals the cut so the
+    # v1.1.0 审计批次: a truncated resume is NOT a success. Exit 3 signals the cut so the
     # next agent does not read a partial handoff as complete.
     assert r.returncode == 3, (r.returncode, r.stdout, r.stderr)
     out = r.stdout
