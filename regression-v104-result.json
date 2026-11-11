@@ -4,9 +4,9 @@
   "passed": 22,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 24.39,
+  "elapsed_seconds": 26.79,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "641DCEE82146E7E3E1AF8CBCA457AA1B40D266E23E49D74FAC315BCDA561FBBD",
+  "script_sha256": "BE6C385B1C7F8DA9A268BA98E9400E71E07B58169BB1360D8383ED3089BFD3BE",
   "python": "3.13.14",
   "platform_verified": "Windows-11-10.0.26200-SP0",
   "platforms_not_verified": [

@@ -1,7 +1,7 @@
 {
   "suite": "project-protocol v1.0.2 regression",
   "script_under_test": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "641DCEE82146E7E3E1AF8CBCA457AA1B40D266E23E49D74FAC315BCDA561FBBD",
+  "script_sha256": "BE6C385B1C7F8DA9A268BA98E9400E71E07B58169BB1360D8383ED3089BFD3BE",
   "python": "3.13.14",
   "platform_verified": "Windows 11",
   "platforms_not_verified": [
@@ -9,7 +9,7 @@
     "Darwin"
   ],
   "concurrency_rounds": 10,
-  "elapsed_seconds": 114.17,
+  "elapsed_seconds": 107.18,
   "cases": 24,
   "passed": 24,
   "failed": 0,
@@ -72,14 +72,14 @@
       "name": "R07 add/tail roundtrip and 5-field format",
       "ok": true,
       "detail": {
-        "line": "- [2026-11-11 14:07] DONE | T01 | 正常节点 | 04_成果/T01/交付/报告.txt | NEXT review"
+        "line": "- [2026-11-11 14:35] DONE | T01 | 正常节点 | 04_成果/T01/交付/报告.txt | NEXT review"
       }
     },
     {
       "name": "R08 newline and pipe field sanitisation",
       "ok": true,
       "detail": {
-        "line": "- [2026-11-11 14:07] DECIDED | T01 | one REJECTED / fake field | - | NEXT -"
+        "line": "- [2026-11-11 14:35] DECIDED | T01 | one REJECTED / fake field | - | NEXT -"
       }
     },
     {
@@ -88,7 +88,7 @@
       "detail": {
         "rows": [
           "- [2026-11-06 10:00] DONE | T01 | previous | - | NEXT -",
-          "- [2026-11-11 14:07] REJECTED | T01 | newline-bug-method | - | NEXT -"
+          "- [2026-11-11 14:35] REJECTED | T01 | newline-bug-method | - | NEXT -"
         ]
       }
     },
@@ -127,7 +127,7 @@
       "ok": true,
       "detail": {
         "rc": 2,
-        "stderr": "ERROR: 项目根不存在或不是目录：C:\\Users\\tjs\\AppData\\Local\\Temp\\pp-verify2-vhegqj8b\\base\\pp-reg-d1l10bpf\\does-not-exist-r14"
+        "stderr": "ERROR: 项目根不存在或不是目录：C:\\Users\\tjs\\AppData\\Local\\Temp\\pp-full-h4j698c7\\regression_tests\\pp-reg-4w1_wjmj\\does-not-exist-r14"
       }
     },
     {
@@ -176,7 +176,7 @@
             "rc": 2
           }
         ],
-        "normalized": "- [2026-11-11 14:07] DONE | T01 | probe-good | 04_成果/T01/交付/报告.txt | NEXT -"
+        "normalized": "- [2026-11-11 14:35] DONE | T01 | probe-good | 04_成果/T01/交付/报告.txt | NEXT -"
       }
     },
     {

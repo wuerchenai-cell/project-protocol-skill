@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """project-protocol v1.1.0 review regression suite (v111).
 
-Covers the eight behaviours introduced by the post-v1.1.0 review batch, all of
+Covers the ten behaviours introduced by the post-v1.1.0 review batch, all of
 which are deterministic and offline. Every case runs on an isolated temporary
 project under the system temp dir (the default workdir is a fresh mkdtemp()
 container that self-cleans), so running the suite never dirties the repo.
@@ -18,6 +18,8 @@ Scope:
   N08  handoff reads L0/L1 without taking the write lock (no deadlock under lock)
   N09  a long last record with no final newline is never merged into the next one
   N10  resume prints the real L1 section 关键决策索引 (never a phantom 决策 block)
+  N11  a handoff publish conflict leaves NO .tmp residue and keeps the rival card
+  N12  init <file>/sub is rejected by PREFLIGHT (not a mid-write INIT FAILED)
 
 No assertion of the earlier v1.0.2 / v1.0.3 / v1.0.4 / v1.1.0 suites was
 weakened; those suites still run and must still pass independently.
@@ -470,6 +472,66 @@ def n10(s):
             "body_visible": "DECISION-PROBE" in r.stdout}
 
 
+# ---------------------------------------------------------------------------
+# N11 : handoff publish conflict -> no .tmp residue, rival card untouched
+# ---------------------------------------------------------------------------
+def n11(s):
+    """A same-second publish conflict must not orphan HANDOFF-<ts>.md.tmp.
+
+    Before the fix the three `except` branches of cmd_handoff called die()
+    without removing the temp file, so a rejected publish left a permanent
+    .tmp residue next to the rival card.
+    """
+    p = s.init("handoff-conflict")
+    s.seed(p, status="WIP", text="conflict-token")
+    mem = p / "06_记忆"
+    fixed = "HANDOFF-FIXED.md"
+    rival = mem / fixed
+    rival.write_text("rival card", encoding="utf-8")
+    # Pin the card name so the conflict is deterministic (no clock race).
+    s.mod._handoff_card_name = lambda: fixed
+    args = SimpleNamespace(root=p, by="tester", tail_lines=30,
+                           limit_done=5, limit_negative=5)
+    so, se = io.StringIO(), io.StringIO()
+    rc = 0
+    with contextlib.redirect_stdout(so), contextlib.redirect_stderr(se):
+        try:
+            s.mod.cmd_handoff(args)
+        except SystemExit as exc:
+            rc = int(exc.code or 0)
+    assert rc == 2, (rc, so.getvalue(), se.getvalue())
+    assert "已由其他写者创建" in se.getvalue(), se.getvalue()[:DETAIL_CHARS]
+    residue = sorted(x.name for x in mem.iterdir() if x.name.endswith(".tmp"))
+    assert not residue, "temp residue survived a rejected publish: %r" % residue
+    assert rival.read_text(encoding="utf-8") == "rival card", "rival was clobbered"
+    return {"conflict_rc": rc, "tmp_residue": residue,
+            "rival_intact": True}
+
+
+# ---------------------------------------------------------------------------
+# N12 : init <file>/sub -> clean PREFLIGHT rejection, nothing written
+# ---------------------------------------------------------------------------
+def n12(s):
+    """When root does not exist but its nearest existing ancestor is a FILE,
+    init must fail the preflight (rc=2, no writes) instead of dying mid-write
+    with a generic "初始化中途异常". Before the fix the ancestor check lived
+    inside `if root.is_dir():`, so `init <file>/sub` slipped past preflight.
+    """
+    container = s.root("init-ancestor-file")
+    blocker = container / "blocker.txt"
+    blocker.write_text("not a directory", encoding="utf-8")
+    target = blocker / "sub"
+    rc, so, se = s.capture_init(target)
+    assert rc == 2, (rc, so, se)
+    assert "初始化预检失败" in se, se[:DETAIL_CHARS]
+    assert "父路径冲突" in se, se[:DETAIL_CHARS]
+    assert "初始化中途异常" not in se, "mid-write failure leaked: %r" % se[:DETAIL_CHARS]
+    assert not target.exists(), "target was created despite preflight failure"
+    assert blocker.read_text(encoding="utf-8") == "not a directory", "blocker modified"
+    return {"preflight_rc": rc, "target_absent": not target.exists(),
+            "blocker_intact": True}
+
+
 CASES = [
     ("N01a tail --lines 0/negative semantics", n01a),
     ("N01b resume --lines 0/negative semantics", n01b),
@@ -487,6 +549,8 @@ CASES = [
     ("N08 handoff reads without the write lock", n08),
     ("N09 long unterminated last line stays separate", n09),
     ("N10 resume prints the real L1 decision-index section", n10),
+    ("N11 handoff conflict leaves no .tmp residue", n11),
+    ("N12 init <file>/sub is a clean preflight rejection", n12),
 ]
 
 
@@ -506,7 +570,7 @@ def main():
         s.case(name, fn)
     passed = sum(r["ok"] for r in s.results)
     report = {
-        "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名)",
+        "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检)",
         "cases": len(s.results),
         "passed": passed,
         "failed": len(s.results) - passed,

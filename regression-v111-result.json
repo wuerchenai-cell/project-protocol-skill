@@ -1,12 +1,12 @@
 {
-  "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名)",
-  "cases": 16,
-  "passed": 16,
+  "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检)",
+  "cases": 18,
+  "passed": 18,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 23.81,
+  "elapsed_seconds": 25.53,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "641DCEE82146E7E3E1AF8CBCA457AA1B40D266E23E49D74FAC315BCDA561FBBD",
+  "script_sha256": "BE6C385B1C7F8DA9A268BA98E9400E71E07B58169BB1360D8383ED3089BFD3BE",
   "python": "3.13.14",
   "platform_verified": "Windows-11-10.0.26200-SP0",
   "platforms_not_verified": [
@@ -165,6 +165,24 @@
       "detail": {
         "section_named": "关键决策索引",
         "body_visible": true
+      }
+    },
+    {
+      "name": "N11 handoff conflict leaves no .tmp residue",
+      "ok": true,
+      "detail": {
+        "conflict_rc": 2,
+        "tmp_residue": [],
+        "rival_intact": true
+      }
+    },
+    {
+      "name": "N12 init <file>/sub is a clean preflight rejection",
+      "ok": true,
+      "detail": {
+        "preflight_rc": 2,
+        "target_absent": true,
+        "blocker_intact": true
       }
     }
   ]

@@ -34,7 +34,8 @@ Implemented guarantees:
   * handoff generates a HANDOFF-YYYYMMDD-HHMMSS.md snapshot via an atomic
     no-clobber write (O_EXCL | O_CREAT open then copy+fsync), never overwrites
     an existing card, and reads the latest WIP that has not been superseded by
-    a later DONE / DECIDED entry.
+    a later same-TID DONE / REJECTED / BLOCKED entry (a later DECIDED, or any
+    entry of a DIFFERENT TID, does NOT end the WIP).
   * resume prints a cold-start handoff package with line / byte accounting and
     enforces an output budget by ACTUAL LINES (not list elements) so
     card_text / l1 multi-line strings count correctly.
@@ -878,6 +879,15 @@ def cmd_init(args):
         if any(root.iterdir()):
             problems.append("目标目录非空：旧项目一律不改动。init 只接受不存在或空目录；"
                             "已有项目接入本协议须由用户单独显式授权")
+    else:
+        # root 不存在：仍须检查「最近的存在祖先」。若它是文件，root 永远无法
+        # 成为目录，写入会在中途才失败，报「初始化中途异常」而不是这里承诺的
+        # 干净预检失败。例：`init <file>/sub`。
+        anc = root.parent
+        while not anc.exists() and anc != anc.parent:
+            anc = anc.parent
+        if anc.exists() and not anc.is_dir():
+            problems.append("父路径冲突（需要目录，但已是文件）：%s" % anc)
 
     if problems:
         die("初始化预检失败，未写入任何文件：\n  - " + "\n  - ".join(problems))
@@ -1518,6 +1528,15 @@ def cmd_handoff(args):
         die("交接卡片无法原子发布：%r" % (exc,))
     except Exception as exc:
         die("发布交接卡片失败：%r" % (exc,))
+    finally:
+        # publish_completion removes the temp on success. On EVERY failure path
+        # above (conflict / unsupported / unexpected) the temp would otherwise
+        # be orphaned as HANDOFF-<ts>.md.tmp, so remove it here. Best-effort:
+        # if the card was actually published, the temp is already gone.
+        try:
+            os.unlink(str(tmp_card))
+        except OSError:
+            pass
 
     print("HANDOFF OK | %s | %d 字节 | sha256 %s" % (
         card_path.relative_to(root).as_posix(),

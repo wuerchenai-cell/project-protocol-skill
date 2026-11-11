@@ -4,13 +4,14 @@
 
 ## 提交前自检（缺一即打回）
 
-1. **跑全部回归**（4 套 + 独立验收），必须全绿：
+1. **跑全部回归**（5 套 + 独立验收），必须全绿：
 
    ```bash
    python regression_tests.py --script progress.py --out regression-base-result.json --workdir <临时目录>
    python regression_tests_v103.py --script progress.py --out regression-v103-result.json --workdir <临时目录>
-   python regression_tests_v104.py
-   python regression_tests_v110.py
+   python regression_tests_v104.py --script progress.py --out regression-v104-result.json --workdir <临时目录>
+   python regression_tests_v110.py --script progress.py --out regression-v110-result.json --workdir <临时目录>
+   python regression_tests_v111.py --script progress.py --out regression-v111-result.json --workdir <临时目录>
    python independent_acceptance_v104.py
    ```
 
