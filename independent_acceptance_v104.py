@@ -305,7 +305,9 @@ for name, fn in CASES:
 summary = {"cases": len(RESULTS), "passed": sum(r["passed"] for r in RESULTS),
            "failed": sum(not r["passed"] for r in RESULTS),
            "harness_errors": sum("harness_error" in r for r in RESULTS), "results": RESULTS}
-RESULT_PATH = Path(os.environ.get("PP_RESULTS", str(BASE / "independent-results-v104.json")))
+RESULT_PATH = Path(os.environ.get("PP_RESULTS",
+                                   str(Path(tempfile.gettempdir())
+                                       / "pp-independent-results-v104.json")))
 RESULT_PATH.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print(json.dumps({k: v for k, v in summary.items() if k != "results"}, ensure_ascii=False), flush=True)
 # Self-cleanup: this script created FIXTURES via mkdtemp; remove it after the

@@ -1,14 +1,14 @@
 {
   "suite": "project-protocol v1.0.3 7-fix regression",
   "script_under_test": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "12dc7e880a75541bbca884fdc355f745bc02ff45bc921136bb66d25f8dd4422f",
+  "script_sha256": "c1645f9bf1401d47383f32f40b7374c2279caa8eaf22bb81c2b1b63a3a870317",
   "python": "3.13.14",
   "platform_verified": "Windows 11",
   "platforms_not_verified": [
     "Linux",
     "Darwin"
   ],
-  "elapsed_seconds": 40.37,
+  "elapsed_seconds": 42.09,
   "cases": 29,
   "passed": 29,
   "failed": 0,
@@ -369,7 +369,7 @@
       "ok": true,
       "detail": {
         "contender_rc": 2,
-        "bounded_seconds": 0.49,
+        "bounded_seconds": 0.48,
         "after_release_rc": 0
       }
     },

@@ -24,8 +24,10 @@ Scope:
   A/04  handoff opens the card exclusively (x): a same-minute collision is an
         explicit error, never an overwrite
   A/05  resume prints a bounded cold-start package (read manifest + budget)
-  A/06  resume works without any prior card (first-time-ever handoff)
-  A/07  resume honours the --max-lines budget
+  A/06  resume works without any prior card (first-time-ever handoff); leads
+        with the authoritative L1 "下一步" section
+  A/07  resume honours the --max-lines budget AND reports truncation with
+        exit code 3 (not a false success)
   A/08  resume reports the card location under 06_记忆/ (not "on L1")
   B/01  init publishes a v1.1.0 version identity that satisfies the checker
   B/02  a real complete v1.0.4 entry stays usable after upgrade
@@ -63,8 +65,9 @@ def _load(script):
 
 
 class Suite:
-    def __init__(self, script, workdir):
+    def __init__(self, script, workdir, auto_work=False):
         self.script = Path(script).resolve()
+        self.auto_work = auto_work
         self.mod = _load(self.script)
         self.work = Path(workdir).resolve()
         self.work.mkdir(parents=True, exist_ok=True)
@@ -117,6 +120,9 @@ class Suite:
 
     def cleanup(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
+        if self.auto_work:
+            # The container is a fresh mkdtemp() this run created; remove it too.
+            shutil.rmtree(self.work, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -252,12 +258,15 @@ def a06(s):
     assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
     out = r.stdout
     assert "无清算" not in out  # sanity: not the no-protocol error path
-    assert "（L0 末尾无）" in out, "expected an empty negative block, got %s" % out[:DETAIL_CHARS]
+    # v1.1.1+: the empty negative block is reported positively, and the L1
+    # "下一步" section is guaranteed to appear (L1-before-card ordering).
+    assert "（L0 无）" in out, "expected an empty negative block, got %s" % out[:DETAIL_CHARS]
+    assert "L1「下一步」" in out, "resume must lead with the authoritative next step"
     return {"has_card_section": "首次交接" in out or "无交接快照" in out}
 
 
 def a07(s):
-    """resume honours the --max-lines budget and reports truncation."""
+    """resume honours the --max-lines budget and reports truncation (exit 3)."""
     p = s.init("resume-budget")
     # Fill the log so resume output would be far larger than the budget.
     for i in range(20):
@@ -265,10 +274,12 @@ def a07(s):
               "--text", "budget-token-%d" % i)
     r = s.cli("resume", "--root", str(p), "--max-lines", "5",
               "--max-bytes", "100000")
-    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+    # v1.1.1+: a truncated resume is NOT a success. Exit 3 signals the cut so the
+    # next agent does not read a partial handoff as complete.
+    assert r.returncode == 3, (r.returncode, r.stdout, r.stderr)
     out = r.stdout
-    assert "已达预算" in out, out[-DETAIL_CHARS:]
-    return {"resized": "--max-lines 5"}
+    assert "RESUME TRUNCATED" in out, out[-DETAIL_CHARS:]
+    return {"resized": "--max-lines 5", "exit_code": 3}
 
 
 def a08(s):
@@ -282,7 +293,7 @@ def a08(s):
     out = r.stdout
     assert out.count("落盘于 L1") == 0, out[:DETAIL_CHARS]
     if "最新交接快照" in out:
-        line = [l for l in out.splitlines() if l.startswith("最新交接快照")]
+        line = [l for l in out.splitlines() if "最新交接快照" in l]
         assert line and "06_记忆" in line[0], line
     return {"snapshot_line": "06_记忆/ 下" if "06_记忆" in out else None}
 
@@ -364,9 +375,12 @@ def main():
     ap = argparse.ArgumentParser(description="project-protocol v1.1.0 regression")
     ap.add_argument("--script", default=str(HERE / "progress.py"))
     ap.add_argument("--out", default=str(HERE / "regression-v110-result.json"))
-    ap.add_argument("--workdir", default=str(HERE / "test-scratch-v110"))
+    ap.add_argument("--workdir", default=None,
+                    help="scratch directory (default: fresh mkdtemp outside the repo)")
     args = ap.parse_args()
-    s = Suite(args.script, args.workdir)
+    auto_work = args.workdir is None
+    workdir = args.workdir or tempfile.mkdtemp(prefix="pp-v110-container-")
+    s = Suite(args.script, workdir, auto_work=auto_work)
     started = __import__("time").monotonic()
     for name, fn in CASES:
         s.case(name, fn)

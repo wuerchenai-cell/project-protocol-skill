@@ -119,8 +119,9 @@ def worker_main(argv):
 # harness
 # --------------------------------------------------------------------------
 class Suite:
-    def __init__(self, script, workdir, rounds):
+    def __init__(self, script, workdir, rounds, auto_work=False):
         self.script = Path(script).resolve()
+        self.auto_work = auto_work
         self.work = Path(workdir).resolve()
         self.work.mkdir(parents=True, exist_ok=True)
         self.rounds = rounds
@@ -173,6 +174,9 @@ class Suite:
 
     def cleanup(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
+        if self.auto_work:
+            # The container is a fresh mkdtemp() this run created; remove it too.
+            shutil.rmtree(self.work, ignore_errors=True)
 
 
 # --------------------------------------------------------------------------
@@ -570,11 +574,13 @@ def main():
     ap.add_argument("--script", required=True, help="path to the progress.py under test")
     ap.add_argument("--out", required=True, help="path for the JSON result")
     ap.add_argument("--rounds", type=int, default=10, help="concurrency rounds (default 10)")
-    ap.add_argument("--workdir", default=None, help="scratch directory for temp projects")
+    ap.add_argument("--workdir", default=None,
+                    help="scratch directory for temp projects (default: fresh mkdtemp outside the repo)")
     args = ap.parse_args()
 
-    workdir = args.workdir or str(HERE / "_scratch")
-    s = Suite(args.script, workdir, args.rounds)
+    auto_work = args.workdir is None
+    workdir = args.workdir or tempfile.mkdtemp(prefix="pp-reg-container-")
+    s = Suite(args.script, workdir, args.rounds, auto_work=auto_work)
     started = time.time()
     cases = [
         ("R01 empty dir init succeeds", r01),

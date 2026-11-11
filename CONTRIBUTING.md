@@ -19,12 +19,12 @@
 
 ## 文档与代码的一致性
 
-以下四处描述同一份 CLI 事实，改 CLI 行为必须四处同步，缺一会被 v103 的 V30 一致性测试拦下：
+「CLI 事实」由 v103 的 V30 一致性用例守护，覆盖的不是固定某四处文档，而是下列互不重叠的表面：
+- `progress.py` 的 argparse `--help` 文本（main / init / add / tail / check 五个帮助面；`handoff` / `resume` 不在 V30 断言内，改这两条命令的帮助文本请顺手跑 v110）
+- `INSTALL.md` 的版本史关口（`v1.0.3` / 交付包名 / 各回归脚本名 / `--lock-timeout` / 「未验证」）
+- `SKILL.md`、`PROJECT_TEMPLATE.md` 与「内嵌生成 AGENTS.md 模板」中的版本史、frontmatter 64 行上限、UTF-8 BOM、完成标识四处不变式
 
-- `progress.py` 的 argparse `--help` 文本
-- `SKILL.md` 第 7 节命令清单
-- `CAPABILITIES.md` 能力表
-- `INSTALL.md` 中的用法示例
+另请注意：`CAPABILITIES.md` 与 `SKILL.md` 第 7 节命令清单、`progress.py --help` 之间由**人工约定**保持一致（行为细节面广，换命令加参数时请顺手核对），`regression_tests_v103.py` 的 V30 门禁不会自动检查 CAPABILITIES.md。
 
 ## 分支与提交
 

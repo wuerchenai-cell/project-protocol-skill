@@ -83,10 +83,15 @@ DRIVE_RE = re.compile(r"^[A-Za-z]:")
 EXIT_OK = 0            # check succeeded, no negative record
 EXIT_NEGATIVE = 1      # check succeeded, a negative record was found
 EXIT_ERROR = 2         # usage error / missing, incomplete or unreadable protocol files
+EXIT_TRUNCATED = 3     # resume reached its output budget and stopped early
 
 DEFAULT_LOCK_TIMEOUT = 10.0
 DEFAULT_MAX_LINES = 40
 DEFAULT_MAX_BYTES = 8192
+# Resume is a cold-start handoff: the next agent MUST see L1 + "下一步" to
+# start safely, so its default budget is much larger than check's.
+DEFAULT_RESUME_MAX_LINES = 400
+DEFAULT_RESUME_MAX_BYTES = 262144
 
 # Windows can raise a transient sharing violation (PermissionError 13 /
 # winerror 32) when several processes open the same small file in rapid
@@ -185,8 +190,8 @@ AGENTS_BODY = """# AGENTS.md
 - 本文件首部有明确的版本身份行，末行是带正文摘要的完成标识。`add` / `tail` / `check` 按身份选择规则：
   - 当前版本：完成标识必须是最后非空行，且标识里的 sha256 与正文一致；缺少标识、正文被截断或改写一律返回 2，**不回落旧版启发式**。
   - v1.0.2 / v1.0.3 完整入口：按明确的旧版身份 + 完整章节结构 + 精确结尾行（或已知完整指纹）判定；残缺旧版返回 2。脚本不会改写旧项目，也不会补造完成标识。
-- `init` 发布本文件时使用原子且仅当目标不存在的硬链接；若预检之后、发布之前有另一写者创建了 AGENTS.md，`init` 明确失败并完整保留对方字节，不覆盖、不删除、不列为本次产物。
-- 当前文件系统若不支持该原子操作，`init` 明确报错，不静默降级为可能覆盖目标的 os.replace。
+- `init` 发布本文件时使用原子且仅当目标不存在的发布：首选硬链接；硬链接不可用时退回 `O_EXCL | O_CREAT` 独占创建后复制+fsync；两条路径都保证目标此前不存在，绝不覆盖。若预检之后、发布之前有另一写者创建了 AGENTS.md，`init` 明确失败并完整保留对方字节，不覆盖、不删除、不列为本次产物。
+- 任何情况下都不用 os.replace：它会把一个已存在的写入者覆盖掉。若平台与发行文件系统都无法提供上述两种原子独占发布能力，`init` 明确报错，绝不静默降级为覆盖式写入。
 
 ## 项目进度
 - 开工前：读 00_定义/RULES.md、00_定义/READER.md、06_记忆/L1_STATE.md 全文和 L0_LOG.md 末尾 30 行；用 `progress.py check "关键词"` 查 REJECTED / BLOCKED，命中别重做。
@@ -317,6 +322,25 @@ def is_transient_open_error(exc):
     return exc.errno in (errno.EACCES, errno.EAGAIN)
 
 
+def _is_transient_lock_error(exc):
+    """Whether a lock-acquire failure is transient contention, safe to poll.
+
+    Used by CrossProcessLock.__enter__'s retry loop. POSIX flock on a
+    contended file raises EAGAIN / EWOULDBLOCK; Windows _locking raises
+    a PermissionError 13 (EACCES) or winerror 33 ("locking violation"). All of
+    these go away as soon as the holder releases, so polling is safe. A
+    genuine disk error (ENOSPC, EIO, EBADF, ...) is NOT listed and must
+    surface immediately instead of being logged as a bogus "timeout".
+    """
+    if not isinstance(exc, OSError):
+        return False
+    if getattr(exc, "winerror", None) in (13, 32, 33):
+        return True
+    if isinstance(exc, PermissionError):
+        return True
+    return exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EACCES)
+
+
 def retry_open(path, mode, **kwargs):
     """Open a file, retrying transient Windows sharing violations only.
 
@@ -389,19 +413,59 @@ def resolve_root(arg):
     return Path(arg).expanduser().resolve() if arg else Path.cwd().resolve()
 
 
+# Semantics shared by `tail --lines`, `resume --lines`, and the handoff
+# limits: 0 means "output zero rows", and negative is a usage error. A naive
+# `lines[-n:]` treats -0 == 0 (returning the whole list) and silently accepts
+# negatives, so every such slice must go through `tail_slice` below.
+def tail_slice(lines, n):
+    if n <= 0:
+        return []
+    return lines[-n:]
+
+
+def non_negative_int(value):
+    """argparse type: a non-negative integer; negative is a usage error (exit 2).
+
+    Used for --lines / --tail-lines / --limit-done / --limit-negative so that
+    0 and negative get ONE consistent meaning across every command.
+    """
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(
+            "必须是整数（收到 %r）；0 表示输出零条，负数视为使用错误" % (value,))
+    if v < 0:
+        raise argparse.ArgumentTypeError(
+            "不能为负数（收到 %d）；0 表示输出零条" % v)
+    return v
+
+
 def _agents_version(text):
     """Select the completion rule by an EXPLICIT version identity.
 
-    Never a fuzzy "two substrings" heuristic: the current template also
-    contains the old section heading and the old tail string, so a truncated
-    current entry would otherwise pass the legacy branch (audit finding P2/B01).
+    Anchors are the explicit identity line / completion marker texts, NOT bare
+    "project-protocol vX.Y.Z" title substrings. A v1.0.4 entry's BODY may
+    legitimately quote the older "project-protocol v1.0.3" string (changelog),
+    so the old full-text-substring order could misjudge a v1.0.4 file as
+    v1.0.3. v1.0.4 is checked before v1.0.3, and v1.0.3 matches ONLY on its
+    exact completion marker (not on a title substring). Never a fuzzy
+    "two substrings" heuristic: a truncated current template carries the old
+    section heading and old tail string and would otherwise pass the legacy
+    branch (audit finding P2/B01).
     """
+    # current is identified by its identity line or its marker prefix.
     if CURRENT_AGENTS_ID in text or CURRENT_MARKER_PREFIX in text:
         return "current"
-    if LEGACY_V103_MARKER in text or LEGACY_V103_ID in text:
-        return "v1.0.3"
-    if LEGACY_V104_MARKER in text or LEGACY_V104_ID in text:
+    # v1.0.4 identified by its own marker prefix / identity line, checked
+    # before v1.0.3 so a v1.0.4 body that quotes v1.0.3 is not misjudged.
+    if LEGACY_V104_MARKER in text or LEGACY_V104_MARKER_PREFIX in text or LEGACY_V104_ID in text:
         return "v1.0.4"
+    # v1.0.3 identified ONLY by its exact completion marker, not by a bare
+    # title substring; a body quoting it must not misjudge.
+    if LEGACY_V103_MARKER in text:
+        return "v1.0.3"
+    # v1.0.2 identified by its own title text (the oldest entry; nothing
+    # later quotes this string).
     if LEGACY_V102_ID in text:
         return "v1.0.2"
     return "unknown"
@@ -600,15 +664,31 @@ class CrossProcessLock:
             try:
                 self._try_acquire()
                 return self
-            except OSError:
+            except OSError as exc:
+                # P1-1: only transient lock-contention errors (POSIX EAGAIN /
+                # EWOULDBLOCK, Windows EACCES / winerror 32 "sharing
+                # violation") are safe to poll on. A genuine disk read/write
+                # error (ENOSPC / EIO / EBADF ...) will NEVER go away by
+                # waiting, and must be reported immediately instead of being
+                # reported as a timeout after consuming the whole budget.
+                if not _is_transient_lock_error(exc):
+                    self._close_quietly()
+                    raise
                 if time.monotonic() - started >= self.timeout:
-                    self.fh.close()
-                    self.fh = None
+                    self._close_quietly()
                     raise LockTimeout(
                         "等待写锁超时（%.2fs），已停止且未写入任何内容；"
                         "请稍后重试或调大 --lock-timeout，不要把它当成写入成功。"
                         % self.timeout)
                 time.sleep(self.poll)
+
+    def _close_quietly(self):
+        if self.fh is not None:
+            try:
+                self.fh.close()
+            except OSError:
+                pass
+            self.fh = None
 
     def __exit__(self, *exc_info):
         if self.fh is None:
@@ -632,22 +712,32 @@ class PublishUnsupported(Exception):
     """This platform/filesystem cannot provide atomic no-clobber publish."""
 
 
+def _safe_close(fd):
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+
+
 def _publish_via_oexcl_copy(tmp, target):
     """Fallback for filesystems without hardlink support.
 
     Opens target with O_EXCL | O_CREAT: the OS itself atomically guarantees
-    the target did not exist at the moment of open. On Windows the target
-    fd must be opened with O_BINARY because Windows opens os.open fds in
-    text mode by default, which translates every \n to \r\n on write and
-    would corrupt the published bytes. Bytes are then copied from tmp into
-    the freshly created fd, fsync, close. This never clobbers a competing
-    target: if another writer creates target between preflight and our
-    open, the OS returns EEXIST and we raise PublishConflict.
+    the target did not exist at the moment of open. On Windows both fds must
+    be opened with O_BINARY because Windows opens os.open fds in text mode by
+    default, which translates every \n to \r\n (on write) and every \r\n to \n
+    (on read) -- corrupting the published bytes either way. Bytes are then
+    copied from tmp into the freshly created fd, fsync, close. This never
+    clobbers a competing target: if another writer creates target between
+    preflight and our open, the OS returns EEXIST and we raise PublishConflict.
+
+    If the copy or fsync fails part-way, the target we created ourselves is
+    closed and deleted: a half-written AGENTS.md / handoff card must NEVER be
+    left where a later init/handoff would treat it as a valid (truncated)
+    entry.
     """
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-    # Windows opens os.open fds in text mode; disable \n -> \r\n translation.
-    if hasattr(os, "O_BINARY"):
-        flags |= os.O_BINARY
+    binary = os.O_BINARY if hasattr(os, "O_BINARY") else 0
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | binary
     try:
         fd = os.open(str(target), flags, 0o644)
     except FileExistsError as exc:
@@ -659,8 +749,9 @@ def _publish_via_oexcl_copy(tmp, target):
             "不会降级为可能覆盖目标的 os.replace" % (exc,)) from exc
     try:
         try:
-            src_fd = os.open(str(tmp), os.O_RDONLY)
+            src_fd = os.open(str(tmp), os.O_RDONLY | binary)
         except OSError as exc:
+            _safe_close(fd)
             raise PublishUnsupported(
                 "O_EXCL 发布后无法读取暂存文件：%r" % (exc,)) from exc
         try:
@@ -678,6 +769,14 @@ def _publish_via_oexcl_copy(tmp, target):
             os.close(src_fd)
         os.fsync(fd)
     except OSError as exc:
+        # A partial copy must not survive. Close the half-written target and
+        # remove it so no later run is tricked into accepting a truncated
+        # entry as a valid completion.
+        _safe_close(fd)
+        try:
+            os.unlink(str(target))
+        except OSError:
+            pass
         raise PublishUnsupported(
             "O_EXCL 发布后写入失败：%r" % (exc,)) from exc
     os.close(fd)
@@ -706,10 +805,23 @@ def publish_completion(tmp, target, label="AGENTS.md 完成入口"):
         if getattr(exc, "winerror", None) == 183 or exc.errno == errno.EEXIST:
             raise PublishConflict(
                 "发布时 %s 已由其他写者创建；原子无覆盖发布被拒绝" % label) from exc
-        # Windows reports this as EOPNOTSUPP (10045); POSIX may use EOPNOTSUP.
-        op_errs = {errno.ENOSYS, errno.EOPNOTSUPP}
-        op_errs.discard(getattr(errno, "EOPNOTSUP", None))
-        if exc.errno not in op_errs:
+        # errno/winerror that mean "os.link is NOT supported here" (so the
+        # O_EXCL | O_CREAT fallback may run). note: on some platforms
+        # errno.EOPNOTSUP and errno.EOPNOTSUPP are ALIASES of the same value,
+        # and on Linux only one of the two names exists -- so we must build the
+        # set by VALUE, not `discard` one name from the other (which could
+        # drop the value we actually need and re-break the fallback). Windows
+        # also reports "not supported" as winerror 1 (ERROR_INVALID_FUNCTION) /
+        # 50 (ERROR_NOT_SUPPORTED) on filesystems without hardlink support.
+        op_errs = set()
+        for _name in ("ENOSYS", "EOPNOTSUP", "EOPNOTSUPP"):
+            _v = getattr(errno, _name, None)
+            if _v is not None:
+                op_errs.add(_v)
+        op_errs.add(errno.EINVAL)  # some filesystems refuse link with EINVAL
+        win_op = getattr(exc, "winerror", None)
+        not_supported = win_op in (1, 50) or exc.errno in op_errs
+        if not not_supported:
             raise PublishUnsupported(
                 "当前平台/文件系统不支持原子无覆盖发布（os.link 失败：%r）；"
                 "不会降级为可能覆盖目标的 os.replace" % (exc,)) from exc
@@ -901,23 +1013,75 @@ def cmd_add(args):
     nxt = clean_field(args.next, "下一步")
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     line = "- [%s] %s | %s | %s | %s | NEXT %s" % (ts, status, tid, text, path, nxt)
+    # ADD DUP: within the same minute the exact same call encodes to the exact
+    # same dedupe key (timestamp + digest of the semantic fields). A genuine
+    # retry-after-flake or a double-fired CLI becomes a confirmed no-op, so one
+    # logical event still maps to exactly one record.
+    dedupe_key = sha12("%s | %s | %s | %s | %s" % (status, tid, text, path, nxt))
+    encoded_line = (line + "\n").encode("utf-8")
 
     lock_path = root / "06_记忆" / "L0_LOG.md.lock"
     try:
         with CrossProcessLock(lock_path, timeout=args.lock_timeout):
             with retry_open(p, "r+b") as f:
+                # The append path writes RAW bytes with no encoder involved, so
+                # a log that is not UTF-8 (most commonly a Windows tool that
+                # saved the file as UTF-16/UTF-32) would silently turn into a
+                # byte soup: the reader's utf-8-sig decode would then see the
+                # new record as garbage or mis-decode the whole file. The
+                # BOM signatures are deterministic, so reject them before any
+                # write instead of letting the next reader fail or silently
+                # read a mixed-encoding file.
+                f.seek(0)
+                head = f.read(6)
+                if head.startswith(b"\xff\xfe\x00\x00") or head.startswith(b"\x00\x00\xfe\xff"):
+                    die("L0_LOG.md 疑似以 UTF-32 保存（BOM：%s）。add 只追加 UTF-8 字节，"
+                        "混写会让文件彻底不可读；请先把 06_记忆/L0_LOG.md 转存为 UTF-8"
+                        "（脚本不改写历史正文，请人工转码）再继续。" % head.hex())
+                if head.startswith(b"\xff\xfe") or head.startswith(b"\xfe\xff"):
+                    die("L0_LOG.md 疑似以 UTF-16 保存（BOM：%s）。add 只追加 UTF-8 字节，"
+                        "混写会让文件彻底不可读；请先把 06_记忆/L0_LOG.md 转存为 UTF-8"
+                        "（脚本不改写历史正文，请人工转码）再继续。" % head.hex())
+                if b"\x00" in head:
+                    # UTF-16/UTF-32 字符的高位字节（BE）或低位字节（LE）必然是
+                    # NUL；正常 UTF-8 文本里不可能出现 NUL（E0 段为 0xC2 0x80 的
+                    # 第一字节也是 ≥0x80 的）。所以头部 6 字节里存在 NUL 就说明这片
+                    # 文件不是 UTF-8，直接拒绝，绝不写毒。
+                    die("L0_LOG.md 首部存在 NUL 字节（前 6 字节 %s），疑似 UTF-16 / UTF-32 "
+                        "或含 NUL 的非 UTF-8 编码。add 只追加 UTF-8 字节，混写会让文件"
+                        "彻底不可读；脚本不改写历史正文，请人工把 06_记忆/L0_LOG.md "
+                        "转存为 UTF-8 再继续。" % head.hex())
                 f.seek(0, os.SEEK_END)
                 size = f.tell()
-                if size > 0:
+                if size >= len(line.encode("utf-8")) + 1:
+                    f.seek(-(len(encoded_line)), os.SEEK_END)
+                    last = f.read(len(encoded_line))
+                    # If the last physical record is byte-identical to this
+                    # line, this is a confirmed duplicate: print ADD DUP, do
+                    # NOT append a second copy.
+                    if last == encoded_line:
+                        print(line)
+                        print("ADD DUP | %s | 未追加重复记录" % dedupe_key)
+                        return
+                elif size > 0:
                     f.seek(-1, os.SEEK_END)
-                    last = f.read(1)
-                    if last not in (b"\n", b"\r"):
+                    last_byte = f.read(1)
+                    if last_byte not in (b"\n", b"\r"):
                         f.seek(0, os.SEEK_END)
                         f.write(b"\n")
                 f.seek(0, os.SEEK_END)
-                f.write(line.encode("utf-8") + b"\n")
+                f.write(encoded_line)
                 f.flush()
                 os.fsync(f.fileno())
+                # Read-back verify: the disk must now end with exactly this
+                # record (and nothing lost to a short write / fsync failure),
+                # otherwise report "not confirmed" instead of claiming success.
+                f.seek(0, os.SEEK_END)
+                size_after = f.tell()
+                if size_after < size + len(encoded_line):
+                    die("写入 L0 后未确认追加成功：期望追加 %d 字节，文件只有 %d 字节；"
+                        "可能写入/fsync 被截断，请人工核对" %
+                        (len(encoded_line), size_after - size))
     except LockTimeout as exc:
         die(str(exc))
     except OSError as exc:
@@ -927,15 +1091,15 @@ def cmd_add(args):
 
 def cmd_tail(args):
     root = require_project(args.root)
-    if args.lines < 0:
-        die("tail --lines 不能为负数：%d" % args.lines)
     p = root / "06_记忆" / "L0_LOG.md"
     try:
         lines = split_log_lines(p.read_text(encoding=READ_ENCODING))
     except (OSError, UnicodeError) as exc:
         die("读取 L0 失败：%r" % (exc,))
     shown = lines if args.raw else [ln for ln in lines if ln.startswith("- [")]
-    for ln in (shown[-args.lines:] if args.lines else []):
+    # tail_slice (not `shown[-args.lines:]`) so --lines 0 outputs zero rows and a
+    # negative value (now rejected by the argparse type) could never return all.
+    for ln in tail_slice(shown, args.lines):
         print(ln)
 
 
@@ -1156,8 +1320,8 @@ def cmd_check(args):
 # 交接（handoff / resume）——跨 agent 换班升级 v1.1.0
 # ---------------------------------------------------------------------------
 LOG_FIELD_RE = re.compile(
-    r"^- \[(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2})\] (?P<status>[A-Z]+) \| (?P<tid>\S*) "
-    r"\| (?P<text>.*) \| (?P<path>\S*) \| NEXT (?P<next>.+)$")
+    r"^- \[(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2})\] (?P<status>[A-Z]+) \| (?P<tid>[^|]*?) "
+    r"\| (?P<text>.*?) \| (?P<path>.*?) \| NEXT (?P<next>.+)$")
 
 HANDOFF_DIR = "06_记忆"
 HANDOFF_GLOB = "HANDOFF-*.md"
@@ -1191,6 +1355,14 @@ def _log_next_command(line):
 def _log_status(line):
     m = LOG_RE.match(line)
     return m.group(1) if m else None
+
+
+def _log_tid(line):
+    """TID field of a log line (e.g. "T01") or "-" when the field is empty."""
+    m = LOG_FIELD_RE.match(line)
+    if not m:
+        return "-"
+    return m.group("tid").strip() or "-"
 
 
 def _latest_handoff(root):
@@ -1232,22 +1404,27 @@ def cmd_handoff(args):
     wip = secs.get("进行中(WIP)", "-") or "-"
     next_sec = secs.get("下一步", "-") or "-"
 
-    tail = lines[-args.tail_lines:]
+    tail = tail_slice(lines, args.tail_lines)
     dones = [ln for ln in tail if _log_status(ln) in ("DONE", "DECIDED")]
-    dones = dones[-args.limit_done:]
+    dones = tail_slice(dones, args.limit_done)
     negs = [ln for ln in tail if _log_status(ln) in NEGATIVE]
-    negs = negs[-args.limit_negative:]
+    negs = tail_slice(negs, args.limit_negative)
 
     wip_line = None
-    # Scan from the end; skip WIP entries that have been superseded by a
-    # later DONE or DECIDED entry (i.e. the work was completed after the WIP).
+    # P0-2: a WIP is ended ONLY by a LATER entry with the SAME TID whose status
+    # is DONE / REJECTED / BLOCKED. A later DECIDED, or any entry of a DIFFERENT
+    # TID, does NOT end the WIP (it refers to a different task). The old code
+    # counted ANY later DONE/DECIDED regardless of TID and ignored
+    # REJECTED/BLOCKED, so a stale WIP could hide the real work.
     for wip_idx in range(len(lines) - 1, -1, -1):
         if _log_status(lines[wip_idx]) == "WIP":
-            has_superseding = any(
-                _log_status(lines[j]) in ("DONE", "DECIDED")
+            wip_tid = _log_tid(lines[wip_idx])
+            superseded = any(
+                _log_status(lines[j]) in ("DONE", "REJECTED", "BLOCKED")
+                and _log_tid(lines[j]) == wip_tid
                 for j in range(wip_idx + 1, len(lines))
             )
-            if not has_superseding:
+            if not superseded:
                 wip_line = lines[wip_idx]
                 break
     next_cmd = _log_next_command(wip_line) if wip_line else None
@@ -1266,10 +1443,24 @@ def cmd_handoff(args):
     lines_body += ["", "## 进行中（来自 L1）", wip if wip.strip() else "-"]
     lines_body += ["", "## 最近完成（L0 末尾，最多 %d 条）" % args.limit_done]
     lines_body += [ln for ln in dones] if dones else ["-"]
-    lines_body += ["", "## 已否决 / 已阻塞（防重复劳动，最多 %d 条）" % args.limit_negative]
-    lines_body += [ln for ln in negs] if negs else ["-"]
-    lines_body += ["", "## 下一步（优先执行）",
-                   next_cmd or "-（L0 最近无 WIP 行；见 L1「下一步」节）",
+    # P0-2: the rejection/prevention block looks at the WHOLE log (most recent
+    # `limit_negative`), because an older-but-still-valid rejection is exactly
+    # what the next agent must not redo. If nothing negative sits in the tail
+    # window we say so positively instead of silently showing "-".
+    all_negs = [ln for ln in lines if _log_status(ln) in NEGATIVE]
+    card_negs = tail_slice(all_negs, args.limit_negative)
+    tail_has_neg = any(_log_status(ln) in NEGATIVE for ln in tail)
+    lines_body += ["", "## 已否决 / 已阻塞（防重复劳动，全量最近 %d 条）" % args.limit_negative]
+    lines_body += [ln for ln in card_negs] if card_negs else ["-"]
+    if not tail_has_neg:
+        lines_body += ["", "（注：L0 末尾 %d 行内无已否决/阻塞记录；"
+                       "上方为更早的记录，仍适用。）" % args.tail_lines]
+    # The card always carries the RAW L1 "下一步" text, so the next agent sees
+    # the authoritative plan even if no WIP line is in effect.
+    lines_body += ["", "## 下一步（优先执行）"]
+    if next_cmd:
+        lines_body.append("从最近 WIP：%s" % next_cmd)
+    lines_body += ["L1「下一步」原文：", next_sec if next_sec.strip() else "-（L1 该节为空）",
                    ]
     lines_body += ["", "## 交接给下一 agent 的行动清单",
                    "1. 读 `06_记忆/L1_STATE.md` 全文（唯一权威；本卡片由脚本按快照方式生成，不是事实源）。",
@@ -1296,7 +1487,7 @@ def cmd_handoff(args):
     except OSError as exc:
         die("写入交接卡片临时文件失败：%r" % (exc,))
     try:
-        publish_completion(tmp_card, card_path)
+        publish_completion(tmp_card, card_path, label="交接卡片（HANDOFF）")
     except PublishConflict as exc:
         die("%s；如需新卡片请等下 1 秒或手工处理" % (exc,))
     except PublishUnsupported as exc:
@@ -1323,9 +1514,10 @@ def cmd_resume(args):
         die("读取协议文件失败：%r" % (exc,))
     l1_lines = split_log_lines(l1)
     l0_lines_all = _collect_log_lines(l0)
-    # --lines 0 must yield ZERO tail lines; Python -0 == 0 would return the
-    # entire list, so handle the zero case explicitly.
-    l0_tail = [] if args.lines == 0 else l0_lines_all[-args.lines:]
+    # tail_slice: --lines 0 yields ZERO rows and negative is rejected by the
+    # argparse type, so the round-trip time of "0 == whole list" cannot occur.
+    l0_tail = tail_slice(l0_lines_all, args.lines)
+    secs = _extract_l1_sections(l1)
     card = _latest_handoff(root)
     card_text = None
     if card is not None:
@@ -1339,6 +1531,15 @@ def cmd_resume(args):
     l0_bytes = len("\n".join(l0_tail).encode("utf-8")) + 1
     card_bytes = len(card_text.encode("utf-8")) if card_text is not None else 0
 
+    negs_all = [ln for ln in l0_lines_all if _log_status(ln) in NEGATIVE]
+    negs = tail_slice(negs_all, args.limit_negative)
+
+    # P0-1 ORDERING: the authoritative plan (L1「下一步」 + the core L1
+    # sections) is printed FIRST, before the handoff card body. The previous
+    # order put the multi-thousand-byte card first, so the default 40-line /
+    # 8192-byte budget frequently truncated the card and hid L1 + "下一步" --
+    # exactly the two things the next agent needs to act. L1-first guarantees
+    # the authoritative content always fits under the (now much larger) budget.
     out = []
     out.append("RESUME | project-protocol v%s / 模板 v%s" % (VERSION, TEMPLATE_VERSION))
     out.append("")
@@ -1357,21 +1558,27 @@ def cmd_resume(args):
                   l1_bytes + l0_bytes + card_bytes,
                   (l1_bytes + l0_bytes + card_bytes) // 3000 + 1))
     out.append("")
-    out.append("最近已否决 / 已阻塞（防止重复劳动，最多 %d 条）：" % args.limit_negative)
-    negs = [ln for ln in l0_tail if _log_status(ln) in NEGATIVE]
-    negs = negs[-args.limit_negative:]
-    out += negs if negs else ["  -（L0 末尾无）"]
+    out.append("=== 先读这里：L1「下一步」（权威，按此执行）===")
+    out.append(secs.get("下一步", "").strip() or "-（L1「下一步」节为空；请先补齐再开工）")
     out.append("")
+    for sec_name in ("决策", "当前目标", "进行中(WIP)"):
+        body = secs.get(sec_name, "").strip()
+        out.append("=== L1「%s」===" % sec_name)
+        out.append(body if body else "-（L1 该节为空）")
+        out.append("")
+    out.append("最近已否决 / 已阻塞（防止重复劳动，全量最近 %d 条）：" % args.limit_negative)
+    out += negs if negs else ["  -（L0 无）"]
+    out.append("")
+    out.append("=== 最新交接快照（仅供导航，位于 06_记忆/ 下，非 L1 本身）===")
     if card_text is not None:
-        out.append("最新交接快照（仅供导航，位于 06_记忆/ 下，非 L1 本身）：")
         out.append(card_text.rstrip())
     else:
-        out.append("（无交接快照；本份位首次交接。L1 仍是唯一权威。）")
+        out.append("（无交接快照；本份为首次交接。L1 仍是唯一权威。）")
     out.append("")
-    out.append("L1_STATE.md 全文（权威）：")
+    out.append("=== L1_STATE.md 全文（权威）===")
     out.append(l1.rstrip())
     out.append("")
-    out.append("L0_LOG.md 末尾 %d 条：" % args.lines)
+    out.append("=== L0_LOG.md 末尾 %d 条 ===" % args.lines)
     out.extend(l0_tail if l0_tail else ["-（空）"])
     out.append("")
     out.append("交接提醒：下一步以 L1「下一步」节为准；动手前先 `check --strict`；会话结束/换 agent 前跑 `handoff`。")
@@ -1380,8 +1587,6 @@ def cmd_resume(args):
     budget_lines = args.max_lines
     budget_bytes = args.max_bytes
     shown, used, truncated = 0, 0, False
-    # Count ACTUAL OUTPUT LINES, not list elements: card_text and l1 are
-    # multi-line string elements that the old code counted as 1 entry each.
     for element in out:
         for physical_line in element.split("\n"):
             if shown >= budget_lines:
@@ -1397,17 +1602,37 @@ def cmd_resume(args):
         if truncated:
             break
     if truncated:
+        # P0-1: a truncated resume MUST NOT exit 0 (it would be read as a
+        # complete handoff). Exit 3 signals "output was cut, L1/下一步 may be
+        # hidden, re-read with a larger budget or open the files directly".
         sys.stdout.write(
-            "... resume 输出已达预算（%d 行 / %d 字节）：请改用 "
-            "`--max-lines` / `--max-bytes` 放宽，或直接读协议文件"
+            "RESUME TRUNCATED | 输出在第 %d 行 / %d 字节处被预算截断；"
+            "L1『下一步』可能未完整呈现。请改用 `--max-lines` / `--max-bytes` 放宽，"
+            "或直接读 06_记忆/L1_STATE.md 与 L0_LOG.md"
             % (budget_lines, budget_bytes) + "\n")
+        sys.exit(EXIT_TRUNCATED)
+
+
+def _configure_std_streams():
+    """Make terminal output UTF-8 so CJK is never mangled by the Windows
+    default codepage, and so an unrepresentable byte falls back to a literal
+    escape sequence instead of crashing. On Linux/macOS this is a no-op (the
+    streams are already UTF-8)."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (ValueError, OSError):  # stream not reconfigurable: leave as-is
+            pass
 
 
 # ---------------------------------------------------------------------------
 # 命令行入口
 def main():
 
-
+    _configure_std_streams()
 
     ap = argparse.ArgumentParser(
         description="project-protocol v%s 确定性小工具（纯标准库 / 离线 / 只追加）" % VERSION
@@ -1444,9 +1669,11 @@ def main():
     a.set_defaults(func=cmd_add)
 
     tail_help = ("读 L0 末尾 N 行日志（冷启动用）；兼容文件首部 UTF-8 BOM；"
-                 "写入端与读取端使用同一套 Unicode 换行定义，不会把一条记录拆成两行")
+                 "写入端与读取端使用同一套 Unicode 换行定义，不会把一条记录拆成两行；"
+                 "--lines 0 输出零条")
     t = sub.add_parser("tail", help=tail_help, description=tail_help)
-    t.add_argument("--lines", type=int, default=30, help="0 表示输出零条；负数报错")
+    t.add_argument("--lines", type=non_negative_int, default=30,
+                   help="0 表示输出零条；负数报错")
     t.add_argument("--raw", action="store_true", help="连同文件头注释一起输出")
     t.add_argument("--root")
     t.set_defaults(func=cmd_tail)
@@ -1472,25 +1699,26 @@ def main():
     h = sub.add_parser("handoff", help=handoff_help, description=handoff_help)
     h.add_argument("--root", help="项目根目录，缺省为当前目录")
     h.add_argument("--by", default=None, help="生成者（人或 agent 名）；缺省 -")
-    h.add_argument("--tail-lines", type=int, default=30,
-                   help="从 L0 末尾取样条数（默认 30）")
-    h.add_argument("--limit-done", type=int, default=5,
-                   help="卡片的最近完成块最多列出几条（默认 5）")
-    h.add_argument("--limit-negative", type=int, default=5,
-                   help="卡片的已否决块最多列出几条（默认 5）")
+    h.add_argument("--tail-lines", type=non_negative_int, default=30,
+                   help="从 L0 末尾取样条数（默认 30；0 表示取零条）")
+    h.add_argument("--limit-done", type=non_negative_int, default=5,
+                   help="卡片的最近完成块最多列出几条（默认 5；0 表示零条）")
+    h.add_argument("--limit-negative", type=non_negative_int, default=5,
+                   help="卡片的已否决块最多列出几条（默认 5；0 表示零条）")
     h.set_defaults(func=cmd_handoff)
 
-    resume_help = ("打印一次「接手包」：读入清单（L1 全文 + 最新交接快照 + L0 末尾 N 行，"
-                   "带行数/字节量化）+ 已否决清单 + L1 全文 + L0 末尾；只读，输出受预算控制，"
-                   "便于把一次冷启动的 Token 开销量化")
+    resume_help = ("打印一次「接手包」：按「L1『下一步』 -> L1 核心节 -> 已否决清单 -> "
+                   "最新交接快照 -> L1 全文 -> L0 末尾」顺序输出，冷启动优先看到权威计划；"
+                   "只读；输出受预算控制；截断返回退出码 3（不是 0）")
     r = sub.add_parser("resume", help=resume_help, description=resume_help)
-    r.add_argument("--lines", type=int, default=30, help="L0 末尾行数（默认 30）")
-    r.add_argument("--limit-negative", type=int, default=5,
-                   help="打印的否决/阻塞行数（默认 5）")
-    r.add_argument("--max-lines", type=int, default=DEFAULT_MAX_LINES,
-                   help="输出预算：最多多少行（默认 40）")
-    r.add_argument("--max-bytes", type=int, default=DEFAULT_MAX_BYTES,
-                   help="输出预算：多少字节（默认 8192）")
+    r.add_argument("--lines", type=non_negative_int, default=30,
+                   help="L0 末尾行数（默认 30；0 表示零条）")
+    r.add_argument("--limit-negative", type=non_negative_int, default=5,
+                   help="打印的否决/阻塞行数（默认 5；0 表示零条）")
+    r.add_argument("--max-lines", type=non_negative_int, default=DEFAULT_RESUME_MAX_LINES,
+                   help="输出预算：最多多少行（默认 400；截断退出码 3）")
+    r.add_argument("--max-bytes", type=non_negative_int, default=DEFAULT_RESUME_MAX_BYTES,
+                   help="输出预算：多少字节（默认 262144；截断退出码 3）")
     r.add_argument("--root")
     r.set_defaults(func=cmd_resume)
 

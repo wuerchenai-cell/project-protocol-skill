@@ -23,28 +23,39 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
-    env:
-      PP_WORK: ${{ runner.temp }}/pp-work
     steps:
       - uses: actions/checkout@v4
 
+      # No cache: this repo has no requirements.txt / pyproject.toml, so
+      # setup-python's `cache: pip` hits "No file matched" and aborts.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
+
+      # PP_WORK must live OUTSIDE the checkout so regression workdirs never
+      # dirty the repo. `runner.temp` is only valid inside a step, so we
+      # derive it here and export it via GITHUB_ENV for later steps.
+      - name: init scratch dirs (outside the checkout)
+        shell: bash
+        run: |
+          echo "PP_WORK=${RUNNER_TEMP}/pp-work" >> "$GITHUB_ENV"
+          mkdir -p "$PP_WORK"
 
       - name: Show interpreter + platform
+        shell: bash
         run: python -c "import sys,platform; print(sys.version); print(platform.platform())"
 
-      # -- SKILL.md word budget gate (first added 2026-11-10, v1.1.0+) --
+      # -- SKILL.md word budget gate (v1.1.0+) --
       # Budget: <2050 words. Counting convention (documented, DECISION):
       #   "words" = whitespace-separated tokens, the standard word-counting
       #   rule for prose (what a reader / tokenizer would naturally call a word).
       #   CJK is NOT split char-by-char; that would inflate the count ~3.8x and
       #   is not how a readable skill's "size budget" is normally judged.
       #   The CJK char count is printed only for transparency, not for gating.
-      #   If the host ever needs char-based gating, revisit here + behavior.
+      #   shell: bash is required: the default shell on windows-latest is pwsh,
+      #   where `python - <<'PY'` is a syntax error.
       - name: SKILL.md budget gate
+        shell: bash
         run: |
           python - <<'PY'
           import pathlib
@@ -55,12 +66,23 @@ jobs:
           assert words <= 2050, f"SKILL.md over word budget: {words} > 2050"
           PY
 
-      - name: init scratch dirs (outside the checkout)
-        run: mkdir -p "$PP_WORK"
+      # -- Guard: no test-scratch dirs may ever be committed again --
+      - name: repo hygiene check (no scratch)
         shell: bash
+        run: |
+          bad=$(git ls-files | grep -E '^(_scratch|test-scratch|regression-scratch)/' || true)
+          if [ -n "$bad" ]; then
+            echo "ERROR: tracked scratch dirs found:"; echo "$bad"; exit 1
+          fi
+          # Also flag untracked-but-present scratch dirs (would be pushed by -A).
+          pre=$(find . -maxdepth 1 -type d \( -name '_scratch*' -o -name 'test-scratch*' -o -name 'regression-scratch*' \) || true)
+          if [ -n "$pre" ]; then
+            echo "ERROR: scratch dirs present in working tree:"; echo "$pre"; exit 1
+          fi
 
-      # ---- base: locking / concurrency ----
+      # ---- base: locking / concurrency (10 rounds) ----
       - name: base regression
+        shell: bash
         run: >
           python regression_tests.py
           --script progress.py
@@ -68,8 +90,9 @@ jobs:
           --workdir "$PP_WORK/base"
           --rounds 10
 
-      # ---- v103: version compatibility ----
+      # ---- v103: version compatibility + doc/CLI consistency ----
       - name: v103 regression
+        shell: bash
         run: >
           python regression_tests_v103.py
           --script progress.py
@@ -78,6 +101,7 @@ jobs:
 
       # ---- v104: init atomic publish ----
       - name: v104 regression
+        shell: bash
         run: >
           python regression_tests_v104.py
           --script progress.py
@@ -86,11 +110,21 @@ jobs:
 
       # ---- v110: handoff / resume ----
       - name: v110 regression
+        shell: bash
         run: >
           python regression_tests_v110.py
           --script progress.py
           --out "$PP_WORK/regression-v110-result.json"
           --workdir "$PP_WORK/v110"
+
+      # ---- v111: this review's regression (0/负数/空间路径/默认 resume/WIP-TID/EINVAL/cp1252) ----
+      - name: v111 regression
+        shell: bash
+        run: >
+          python regression_tests_v111.py
+          --script progress.py
+          --out "$PP_WORK/regression-v111-result.json"
+          --workdir "$PP_WORK/v111"
 
       # ---- independent acceptance (self-cleans fixtures) ----
       - name: independent acceptance v104

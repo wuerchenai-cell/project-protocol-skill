@@ -4,9 +4,9 @@
   "passed": 12,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 16.5,
+  "elapsed_seconds": 12.3,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "12DC7E880A75541BBCA884FDC355F745BC02FF45BC921136BB66D25F8DD4422F",
+  "script_sha256": "C1645F9BF1401D47383F32F40B7374C2279CAA8EAF22BB81C2B1B63A3A870317",
   "python": "3.13.14",
   "platform_verified": "Windows-11-10.0.26200-SP0",
   "platforms_not_verified": [
@@ -25,23 +25,23 @@
       "name": "A01 handoff emits a HANDOFF card with required sections",
       "ok": true,
       "detail": {
-        "card": "HANDOFF-20261110-163804.md",
-        "card_bytes": 1078
+        "card": "HANDOFF-20261111-103429.md",
+        "card_bytes": 1158
       }
     },
     {
       "name": "A02 handoff card binds goal/wip/negative from L0 + L1",
       "ok": true,
       "detail": {
-        "card": "06_记忆/HANDOFF-20261110-163806.md",
-        "next_section": "progress.py resume --lines 10"
+        "card": "06_记忆/HANDOFF-20261111-103430.md",
+        "next_section": "从最近 WIP：progress.py resume --lines 10\nL1「下一步」原文：\n-"
       }
     },
     {
       "name": "A03 handoff card path single-sited, no %-placeholder",
       "ok": true,
       "detail": {
-        "card": "06_记忆/HANDOFF-20261110-163807.md"
+        "card": "06_记忆/HANDOFF-20261111-103431.md"
       }
     },
     {
@@ -50,14 +50,14 @@
       "detail": {
         "card": "06_记忆/HANDOFF-20261109-123000.md",
         "rival_bytes": 68,
-        "stderr": "ERROR: 发布时 AGENTS.md 完成入口 已由其他写者创建；原子无覆盖发布被拒绝；如需新卡片请等下 1 秒或手工处理\n"
+        "stderr": "ERROR: 发布时 交接卡片（HANDOFF） 已由其他写者创建；原子无覆盖发布被拒绝；如需新卡片请等下 1 秒或手工处理\n"
       }
     },
     {
       "name": "A05 resume prints a bounded cold-start package",
       "ok": true,
       "detail": {
-        "stdout_bytes": 2291
+        "stdout_bytes": 2662
       }
     },
     {
@@ -71,7 +71,8 @@
       "name": "A07 resume honours the --max-lines budget",
       "ok": true,
       "detail": {
-        "resized": "--max-lines 5"
+        "resized": "--max-lines 5",
+        "exit_code": 3
       }
     },
     {
@@ -86,7 +87,7 @@
       "ok": true,
       "detail": {
         "version": "1.1.0",
-        "bytes": 7696
+        "bytes": 7956
       }
     },
     {

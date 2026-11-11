@@ -57,8 +57,9 @@ def worker_lockhold(argv):
 
 
 class Suite:
-    def __init__(self, script, workdir):
+    def __init__(self, script, workdir, auto_work=False):
         self.script = Path(script).resolve()
+        self.auto_work = auto_work
         self.mod = _load(self.script)
         self.work = Path(workdir).resolve()
         self.work.mkdir(parents=True, exist_ok=True)
@@ -99,6 +100,9 @@ class Suite:
 
     def cleanup(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
+        if self.auto_work:
+            # The container is a fresh mkdtemp() this run created; remove it too.
+            shutil.rmtree(self.work, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -738,10 +742,13 @@ def main():
     ap = argparse.ArgumentParser(description="project-protocol v1.0.3 7-fix regression")
     ap.add_argument("--script", default=str(HERE / "progress.py"))
     ap.add_argument("--out", required=True)
-    ap.add_argument("--workdir", required=True)
+    ap.add_argument("--workdir", default=None,
+                    help="scratch directory (default: fresh mkdtemp outside the repo)")
     args = ap.parse_args()
+    auto_work = args.workdir is None
+    workdir = args.workdir or tempfile.mkdtemp(prefix="pp-v103-container-")
     started = time.time()
-    s = Suite(args.script, args.workdir)
+    s = Suite(args.script, workdir, auto_work=auto_work)
     for name, fn in CASES:
         s.case(name, fn)
     passed = sum(1 for x in s.results if x["ok"])

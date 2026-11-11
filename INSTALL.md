@@ -3,7 +3,7 @@
 > 本包是 **skill**（一页给 agent 的规则说明），不是需要人记得去翻的文档，也不是安装程序。
 > 规则主体在 `SKILL.md`，格式总表在 `PROJECT_TEMPLATE.md`，确定性工具在 `progress.py`（可选），
 > 可复运行的回归测试在 `regression_tests.py`（原 24 项）、`regression_tests_v103.py`
-> （v1.0.3 七项修复新增用例）、`regression_tests_v104.py`（v1.0.4 两处修复 21 项）、
+> （v1.0.3 七项修复新增用例）、`regression_tests_v104.py`（v1.0.4 两处修复 22 项）、
 > `regression_tests_v110.py`（v1.1.0 handoff/resume + v1.0.4 兼容 12 项）与
 > `independent_acceptance_v104.py`（独立验收 12 项），均可选，宿主可忽略。
 > 版本沿革：v1.1.0 在 v1.0.4 基础上增补换 AI 交接（`handoff` / `resume`，见 `SKILL.md` 第 4.1 节），
@@ -94,7 +94,7 @@ PP_RESULTS=./independent-v104-results.json \
 - `regression_tests_v103.py`：v1.0.3 新增用例，覆盖 Unicode 换行、想法 frontmatter 四种写法与
   各类解析失败、UTF-8 BOM 对照、初始化部分写入 / flush / close / 发布阶段失败与完成标识、
   `.git` 范围、init 与日常接手条件分离、`--lock-timeout` 有限正数与持锁进程异常退出。
-- `regression_tests_v104.py`：v1.0.4 新增 21 项，覆盖发布前竞争写者、发布原语不可用时不降级、
+- `regression_tests_v104.py`：v1.0.4 新增 22 项，覆盖发布前竞争写者、发布原语不可用时不降级、
   暂存文件完整后才发布、无 `os.replace` 回退，以及完成识别六场景（完整新版 / 删标识 /
   末尾规则中途截断 / 更早截断 / 真实完整 v1.0.2 入口 / 残缺旧版）与正文摘要、伪造标识、BOM 等边界。
   `v1.1.0` 新增 `regression_tests_v110.py`：8 项覆盖 `handoff`/`resume`（卡片七节齐全、
@@ -154,7 +154,7 @@ python progress.py resume [--lines 30] [--max-lines 40] [--max-bytes 8192]
 - 不保证 100% 自动记录；提示词规则是软约束。
 - v1.1.0 新增换 AI 交接（`handoff` / `resume`，见 `SKILL.md` 第 4.1 节），v1.0.4 只修复
   独立复审提出的两处初始化缺陷（P1/P2）且全部保留；本版不新增数据库、记忆层、L2/L3 生成器、
-  自动安装器、hook 或项目管理功能；v1.0.3 的 7 项修复与原有 70 项回归保持不变。
+  自动安装器、hook 或项目管理功能；v1.0.3 的 7 项修复与原有 75 项回归保持不变。
 - `--lock-timeout` 必须是有限正数；`nan` / `inf` / `-inf` / `0` / 负数在打开锁文件前即被拒绝。
 - `check` 对想法 frontmatter 解析失败一律返回 `2`，不会输出 CLEAN；文本读取兼容首部 UTF-8 BOM
   且不改写历史正文。

@@ -4,9 +4,9 @@
   "passed": 22,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 23.18,
+  "elapsed_seconds": 18.23,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "12DC7E880A75541BBCA884FDC355F745BC02FF45BC921136BB66D25F8DD4422F",
+  "script_sha256": "C1645F9BF1401D47383F32F40B7374C2279CAA8EAF22BB81C2B1B63A3A870317",
   "python": "3.13.14",
   "platform_verified": "Windows-11-10.0.26200-SP0",
   "platforms_not_verified": [
@@ -25,8 +25,8 @@
       "name": "W01 normal init publishes complete entry, no temp residue",
       "ok": true,
       "detail": {
-        "bytes": 7696,
-        "marker": "<!-- project-protocol:INIT-COMPLETE:v1.1.0 sha256:acd8afa66ea0fe58913c7cd8d3fa2f237d60434d5f35f9797dffba3ba2ab98f6 -->"
+        "bytes": 7956,
+        "marker": "<!-- project-protocol:INIT-COMPLETE:v1.1.0 sha256:5495ee82156a08a7381458c7f804efdbc05d45799d34081dadf49e9b49774695 -->"
       }
     },
     {
@@ -65,7 +65,7 @@
       "name": "W04 temp file is complete before the publish action",
       "ok": true,
       "detail": {
-        "temp_bytes": 7696
+        "temp_bytes": 7956
       }
     },
     {
@@ -80,7 +80,7 @@
       "name": "W08 complete current entry is usable",
       "ok": true,
       "detail": {
-        "marker": "<!-- project-protocol:INIT-COMPLETE:v1.1.0 sha256:acd8afa66ea0fe58913c7cd8d3fa2f237d60434d5f35f9797dffba3ba2ab98f6 -->"
+        "marker": "<!-- project-protocol:INIT-COMPLETE:v1.1.0 sha256:5495ee82156a08a7381458c7f804efdbc05d45799d34081dadf49e9b49774695 -->"
       }
     },
     {
@@ -94,8 +94,8 @@
       "name": "W10 current entry truncated in last rule is rejected",
       "ok": true,
       "detail": {
-        "full_chars": 3928,
-        "kept_chars": 3758,
+        "full_chars": 4032,
+        "kept_chars": 3862,
         "legacy_heading_present": true,
         "legacy_tail_present": true
       }
@@ -104,7 +104,7 @@
       "name": "W11 current entry truncated earlier is rejected",
       "ok": true,
       "detail": {
-        "full_chars": 3928,
+        "full_chars": 4032,
         "kept_chars": 800
       }
     },
@@ -128,8 +128,8 @@
       "name": "W14 B01 audit cut (last 98 chars removed) is rejected",
       "ok": true,
       "detail": {
-        "full_chars": 3928,
-        "kept_chars": 3830,
+        "full_chars": 4032,
+        "kept_chars": 3934,
         "truncated_chars": 98
       }
     },
@@ -173,7 +173,7 @@
       "name": "W20 BOM-prefixed current entry is usable, body untouched",
       "ok": true,
       "detail": {
-        "bytes": 7699
+        "bytes": 7959
       }
     },
     {

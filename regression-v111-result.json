@@ -1,0 +1,154 @@
+{
+  "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁)",
+  "cases": 14,
+  "passed": 14,
+  "failed": 0,
+  "all_passed": true,
+  "elapsed_seconds": 17.19,
+  "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
+  "script_sha256": "C1645F9BF1401D47383F32F40B7374C2279CAA8EAF22BB81C2B1B63A3A870317",
+  "python": "3.13.14",
+  "platform_verified": "Windows-11-10.0.26200-SP0",
+  "platforms_not_verified": [
+    "Linux",
+    "Darwin",
+    "network filesystems",
+    "non-NTFS Windows filesystems"
+  ],
+  "hosts_not_verified": [
+    "skill loading",
+    "long-running agent behaviour",
+    "hooks"
+  ],
+  "results": [
+    {
+      "name": "N01a tail --lines 0/negative semantics",
+      "ok": true,
+      "detail": {
+        "zero_rows": "stdout empty",
+        "negative_rc": 2
+      }
+    },
+    {
+      "name": "N01b resume --lines 0/negative semantics",
+      "ok": true,
+      "detail": {
+        "zero_tail_present": "末尾 0 条",
+        "negative_rc": 2
+      }
+    },
+    {
+      "name": "N01c handoff limit 0/negative semantics",
+      "ok": true,
+      "detail": {
+        "tail0_empty_done": true,
+        "negative_rc": 2
+      }
+    },
+    {
+      "name": "N01d check --max-lines 0/negative semantics",
+      "ok": true,
+      "detail": {
+        "stats_only": "shown: 0",
+        "negative_rc": 2
+      }
+    },
+    {
+      "name": "N02a WIP superseded by same-TID DONE",
+      "ok": true,
+      "detail": {
+        "superseded_by_same_tid_done": true
+      }
+    },
+    {
+      "name": "N02b WIP survives a later different-TID DONE",
+      "ok": true,
+      "detail": {
+        "different_tid_keeps_wip": true
+      }
+    },
+    {
+      "name": "N02c DECIDED (same TID) does NOT end the WIP",
+      "ok": true,
+      "detail": {
+        "decided_does_not_end_wip": true
+      }
+    },
+    {
+      "name": "N02d REJECTED/BLOCKED (same TID) supersede the WIP",
+      "ok": true,
+      "detail": {
+        "rejected_blocked_supersede": [
+          "REJECTED",
+          "BLOCKED"
+        ]
+      }
+    },
+    {
+      "name": "N03 artifact path with spaces stays one record",
+      "ok": true,
+      "detail": {
+        "path": "04_成果/T01/交付/我的 文件 带 空格.pptx",
+        "pipe_count": 4
+      }
+    },
+    {
+      "name": "N04 default resume leads with L1 下一步",
+      "ok": true,
+      "detail": {
+        "i_next": 259,
+        "i_card": 433
+      }
+    },
+    {
+      "name": "N05 publish falls back to O_EXCL on EINVAL",
+      "ok": true,
+      "detail": {
+        "fallback": "O_EXCL|O_CREAT",
+        "bytes": 7956
+      }
+    },
+    {
+      "name": "N06 binary fixtures rejected, not poisoned",
+      "ok": true,
+      "detail": {
+        "utf16_nobom": {
+          "rc": 2,
+          "bytes_unchanged": true,
+          "n": 4
+        },
+        "utf16_bom": {
+          "rc": 2,
+          "bytes_unchanged": true,
+          "n": 6
+        },
+        "utf32_bom": {
+          "rc": 2,
+          "bytes_unchanged": true,
+          "n": 12
+        },
+        "raw_nul16": {
+          "rc": 2,
+          "bytes_unchanged": true,
+          "n": 16
+        }
+      }
+    },
+    {
+      "name": "N07 CJK survives the cp1252 subprocess pipe",
+      "ok": true,
+      "detail": {
+        "error_cjk_intact": true,
+        "success_cjk_intact": true
+      }
+    },
+    {
+      "name": "N08 handoff reads without the write lock",
+      "ok": true,
+      "detail": {
+        "handoff_rc_while_locked": 0,
+        "holder_killed": 1
+      }
+    }
+  ]
+}

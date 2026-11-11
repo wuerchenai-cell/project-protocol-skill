@@ -48,8 +48,9 @@ def _load(script):
 
 
 class Suite:
-    def __init__(self, script, workdir):
+    def __init__(self, script, workdir, auto_work=False):
         self.script = Path(script).resolve()
+        self.auto_work = auto_work
         self.mod = _load(self.script)
         self.work = Path(workdir).resolve()
         self.work.mkdir(parents=True, exist_ok=True)
@@ -85,6 +86,9 @@ class Suite:
 
     def cleanup(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
+        if self.auto_work:
+            # The container is a fresh mkdtemp() this run created; remove it too.
+            shutil.rmtree(self.work, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -535,9 +539,12 @@ def main():
         description="project-protocol v1.0.4 B01/B02 regression")
     ap.add_argument("--script", default=str(HERE / "progress.py"))
     ap.add_argument("--out", default=str(HERE / "regression-v104-result.json"))
-    ap.add_argument("--workdir", default=str(HERE / "test-scratch-v104"))
+    ap.add_argument("--workdir", default=None,
+                    help="scratch directory (default: fresh mkdtemp outside the repo)")
     args = ap.parse_args()
-    s = Suite(args.script, args.workdir)
+    auto_work = args.workdir is None
+    workdir = args.workdir or tempfile.mkdtemp(prefix="pp-v104-container-")
+    s = Suite(args.script, workdir, auto_work=auto_work)
     started = __import__("time").monotonic()
     for name, fn in CASES:
         s.case(name, fn)
