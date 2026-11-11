@@ -102,6 +102,10 @@ PP_RESULTS=./independent-v104-results.json \
   冷启动包带 token 量化、无卡 cold-start、输出预算 `--max-lines` 截断、卡片位置说明正确），
   4 项覆盖 v1.1.0 向后兼容（init 发布新版身份、真实 v1.0.4 入口升级后仍可用、v1.0.4 指纹逐字节核对、
   截断 v1.0.4 入口被拒）。
+- `regression_tests_v111.py`：审计批次新增 14 项，覆盖 0/负数语义全局一致、WIP 只被同 TID 的
+  `DONE`/`REJECTED`/`BLOCKED` 结束、带空格产物路径、默认 `resume` 先打印 L1「下一步」、
+  `os.link` 抛 `EINVAL` 时回退 `O_EXCL` 独占复制、二进制投毒被拒且不写坏、cp1252 管道下 CJK 不丢、
+  `handoff` 不取写锁（持锁时仍可交接）。
 - `independent_acceptance_v104.py`：独立复审原 12 项，A01–A10 与 B01 原样；B02 因 v1.0.4 不再调用
   `os.replace`，注入点改到真实发布原语 `os.link`，并加严断言（原成功条件保留、未删断言）。
 - `fixtures/v102_AGENTS.md`、`fixtures/v103_AGENTS.md` 与 `fixtures/v104_AGENTS.md` 是真实旧版生成的完整入口，只读夹具，

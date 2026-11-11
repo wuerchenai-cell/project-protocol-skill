@@ -223,7 +223,9 @@ Windows 多进程并发时打开锁文件偶发 `PermissionError(13)` 瞬时共�
 可复运行回归测试：`regression_tests.py`（原 24 项，含并发）、
 `regression_tests_v103.py`（v1.0.3 七项修复新增用例）、
 `regression_tests_v104.py`（v1.0.4 两处初始化修复 22 项）、
-`regression_tests_v110.py`（v1.1.0 handoff/resume 8 项 + v1.0.4 向后兼容 4 项）与
+`regression_tests_v110.py`（v1.1.0 handoff/resume 8 项 + v1.0.4 向后兼容 4 项）、
+`regression_tests_v111.py`（审计批次 8 行为 14 项：0/负数语义、WIP 同 TID 取代、空格路径、
+默认 resume 先看 L1、EINVAL 回退、二进制投毒、cp1252 管道、读锁不阻塞）与
 `independent_acceptance_v104.py`（独立验收 12 项，B02 注入点适配到新发布原语）。
 命令见 `INSTALL.md`。
 
