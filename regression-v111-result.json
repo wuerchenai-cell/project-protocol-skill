@@ -1,12 +1,12 @@
 {
-  "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检)",
-  "cases": 18,
-  "passed": 18,
+  "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数)",
+  "cases": 21,
+  "passed": 21,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 25.53,
+  "elapsed_seconds": 29.74,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "BE6C385B1C7F8DA9A268BA98E9400E71E07B58169BB1360D8383ED3089BFD3BE",
+  "script_sha256": "1CB9785978EDAB9393F5F927B13400A478E4468ED4E3C9336BC31AB30C7D242F",
   "python": "3.13.14",
   "platform_verified": "Windows-11-10.0.26200-SP0",
   "platforms_not_verified": [
@@ -183,6 +183,33 @@
         "preflight_rc": 2,
         "target_absent": true,
         "blocker_intact": true
+      }
+    },
+    {
+      "name": "N13 ADD DUP matches the record (newline-less EOF / minute scope)",
+      "ok": true,
+      "detail": {
+        "newline_less_eof_deduped": true,
+        "longer_tail_kept": true,
+        "minute_scoped": true
+      }
+    },
+    {
+      "name": "N14 resume reports 0 bytes for an empty L0 tail",
+      "ok": true,
+      "detail": {
+        "zero_lines_zero_bytes": true,
+        "empty_l0": true
+      }
+    },
+    {
+      "name": "N15 leading-dash values/positionals survive argparse",
+      "ok": true,
+      "detail": {
+        "dash_value": true,
+        "dash_positional": true,
+        "help_still_wins": true,
+        "equals_and_dashdash": true
       }
     }
   ]

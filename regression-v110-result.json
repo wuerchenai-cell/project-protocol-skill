@@ -4,9 +4,9 @@
   "passed": 12,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 18.28,
+  "elapsed_seconds": 17.24,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "BE6C385B1C7F8DA9A268BA98E9400E71E07B58169BB1360D8383ED3089BFD3BE",
+  "script_sha256": "1CB9785978EDAB9393F5F927B13400A478E4468ED4E3C9336BC31AB30C7D242F",
   "python": "3.13.14",
   "platform_verified": "Windows-11-10.0.26200-SP0",
   "platforms_not_verified": [
@@ -25,7 +25,7 @@
       "name": "A01 handoff emits a HANDOFF card with required sections",
       "ok": true,
       "detail": {
-        "card": "HANDOFF-20261111-143816.md",
+        "card": "HANDOFF-20261111-211430.md",
         "card_bytes": 1139
       }
     },
@@ -33,7 +33,7 @@
       "name": "A02 handoff card binds goal/wip/negative from L0 + L1",
       "ok": true,
       "detail": {
-        "card": "06_记忆/HANDOFF-20261111-143817.md",
+        "card": "06_记忆/HANDOFF-20261111-211432.md",
         "next_section": "从最近 WIP：progress.py resume --lines 10\nL1「下一步」原文：\n-"
       }
     },
@@ -41,7 +41,7 @@
       "name": "A03 handoff card path single-sited, no %-placeholder",
       "ok": true,
       "detail": {
-        "card": "06_记忆/HANDOFF-20261111-143818.md"
+        "card": "06_记忆/HANDOFF-20261111-211433.md"
       }
     },
     {

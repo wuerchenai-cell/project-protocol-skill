@@ -5,7 +5,7 @@
 > 可复运行的回归测试在 `regression_tests.py`（原 24 项）、`regression_tests_v103.py`
 > （v1.0.3 七项修复新增用例）、`regression_tests_v104.py`（v1.0.4 两处修复 22 项）、
 > `regression_tests_v110.py`（v1.1.0 handoff/resume + v1.0.4 兼容 12 项）、
-> `regression_tests_v111.py`（审计批次 18 项）与
+> `regression_tests_v111.py`（审计批次 21 项）与
 > `independent_acceptance_v104.py`（独立验收 12 项），均可选，宿主可忽略。
 > 版本沿革：v1.1.0 在 v1.0.4 基础上增补换 AI 交接（`handoff` / `resume`，见 `SKILL.md` 第 4.1 节），
 > v1.0.4 的两处初始化修复全部保留；历史交付包链为
@@ -83,9 +83,11 @@ python regression_tests_v110.py \
   --out ./regression-v110-result.json \
   --workdir ./test-scratch-v110
 
-# 独立验收（环境变量指向隔离目录；不设置时输出到脚本所在目录）
-PP_SCRIPT=./progress.py PP_FIXTURES=./acceptance-fixtures \
-PP_RESULTS=./independent-v104-results.json \
+# 独立验收（默认在系统临时目录自建并自清隔离 fixtures；结果写回本目录）
+# 可选 PP_FIXTURES=<目录> 指定 fixtures 位置：该目录会被复用且**不会**自动清理，
+# 重复运行前请先清空（留空则用自建临时目录，跑完即删）。
+PP_SCRIPT=./progress.py \
+PP_RESULTS=./independent-results-v104.json \
   python independent_acceptance_v104.py
 ```
 
@@ -103,12 +105,14 @@ PP_RESULTS=./independent-v104-results.json \
   冷启动包带 token 量化、无卡 cold-start、输出预算 `--max-lines` 截断、卡片位置说明正确），
   4 项覆盖 v1.1.0 向后兼容（init 发布新版身份、真实 v1.0.4 入口升级后仍可用、v1.0.4 指纹逐字节核对、
   截断 v1.0.4 入口被拒）。
-- `regression_tests_v111.py`：审计批次新增 18 项，覆盖 0/负数语义全局一致、WIP 只被同 TID 的
+- `regression_tests_v111.py`：审计批次新增 21 项，覆盖 0/负数语义全局一致、WIP 只被同 TID 的
   `DONE`/`REJECTED`/`BLOCKED` 结束、带空格产物路径、默认 `resume` 先打印 L1「下一步」、
   `os.link` 抛 `EINVAL` 时回退 `O_EXCL` 独占复制、二进制投毒被拒且不写坏、cp1252 管道下 CJK 不丢、
   `handoff` 不取写锁（持锁时仍可交接）、长末行缺换行时不与下一条合并、`resume` 打印真实
   L1 小节名「关键决策索引」、交接发布冲突后不留 `.tmp` 残片且 rival 卡片不受损、
-  `init <file>/sub` 由预检干净拒绝（不退化为写入中途失败）。
+  `init <file>/sub` 由预检干净拒绝（不退化为写入中途失败）、`ADD DUP` 按「记录」而非字节尾巴匹配
+  （缺末尾换行也去重、更长记录的同尾不当重复、跨分钟不去重）、`resume` 空 L0 尾报 0 字节、
+  以 `-` 开头的字段值与位置参数经 argv 归一化后不被 argparse 拒绝。
 - `independent_acceptance_v104.py`：独立复审原 12 项，A01–A10 与 B01 原样；B02 因 v1.0.4 不再调用
   `os.replace`，注入点改到真实发布原语 `os.link`，并加严断言（原成功条件保留、未删断言）。
 - `fixtures/v102_AGENTS.md`、`fixtures/v103_AGENTS.md` 与 `fixtures/v104_AGENTS.md` 是真实旧版生成的完整入口，只读夹具，

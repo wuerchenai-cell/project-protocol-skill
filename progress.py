@@ -1032,10 +1032,12 @@ def cmd_add(args):
     nxt = clean_field(args.next, "下一步")
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     line = "- [%s] %s | %s | %s | %s | NEXT %s" % (ts, status, tid, text, path, nxt)
-    # ADD DUP: within the same minute the exact same call encodes to the exact
-    # same dedupe key (timestamp + digest of the semantic fields). A genuine
-    # retry-after-flake or a double-fired CLI becomes a confirmed no-op, so one
-    # logical event still maps to exactly one record.
+    # ADD DUP: the record text starts with the minute-resolution timestamp, so
+    # the same call re-fired within the SAME MINUTE compares byte-identical to
+    # the last record and becomes a confirmed no-op; a later, genuinely separate
+    # event carries a different timestamp and is appended normally. The printed
+    # dedupe key is only a digest of the semantic fields (no timestamp): it
+    # identifies the event for the message, it does not drive the match.
     dedupe_key = sha12("%s | %s | %s | %s | %s" % (status, tid, text, path, nxt))
     encoded_line = (line + "\n").encode("utf-8")
 
@@ -1072,13 +1074,18 @@ def cmd_add(args):
                         "转存为 UTF-8 再继续。" % head.hex())
                 f.seek(0, os.SEEK_END)
                 size = f.tell()
-                if size >= len(line.encode("utf-8")) + 1:
-                    f.seek(-(len(encoded_line)), os.SEEK_END)
-                    last = f.read(len(encoded_line))
-                    # If the last physical record is byte-identical to this
-                    # line, this is a confirmed duplicate: print ADD DUP, do
-                    # NOT append a second copy.
-                    if last == encoded_line:
+                # Dedupe by RECORD, not by byte-tail: read the tail and split it
+                # with the same line definition the reader uses, then compare the
+                # last record. The previous byte-exact check required the file to
+                # end with `line\n`, so a hand-trimmed file ending in `line` (or a
+                # CRLF-terminated file) slipped past and the same logical event
+                # was appended twice. Splitting also guarantees the match is a
+                # whole record, never the tail of a longer one.
+                if size > 0:
+                    f.seek(-min(size, len(encoded_line) + 8), os.SEEK_END)
+                    tail = f.read().decode("utf-8", "replace")
+                    recs = split_log_lines(tail)
+                    if recs and recs[-1] == line:
                         print(line)
                         print("ADD DUP | %s | 未追加重复记录" % dedupe_key)
                         return
@@ -1366,7 +1373,7 @@ def _extract_l1_sections(text):
     cur = None
     for ln in lines:
         if ln.startswith("## "):
-            cur = ln[3:].strip() if ln.startswith("## ") else ln.strip()
+            cur = ln[3:].strip()
             out.setdefault(cur, [])
         elif cur is not None:
             out[cur].append(ln)
@@ -1571,7 +1578,10 @@ def cmd_resume(args):
 
     # 量化：本次 resume 打印含读入量（行数 / 字节数），让下一 agent 知道"读这些"的开销
     l1_bytes = len(l1.encode("utf-8"))
-    l0_bytes = len("\n".join(l0_tail).encode("utf-8")) + 1
+    # `--lines 0` (and an empty L0) must report ZERO bytes, not one phantom
+    # byte: joining an empty list yields "", whose encoded length is already 0,
+    # so the trailing-newline allowance only applies when there is content.
+    l0_bytes = len("\n".join(l0_tail).encode("utf-8")) + (1 if l0_tail else 0)
     card_bytes = len(card_text.encode("utf-8")) if card_text is not None else 0
 
     negs_all = [ln for ln in l0_lines_all if _log_status(ln) in NEGATIVE]
@@ -1676,6 +1686,75 @@ def _configure_std_streams():
 
 
 # ---------------------------------------------------------------------------
+# CLI argv normalisation
+# ---------------------------------------------------------------------------
+# argparse (by design) refuses any token starting with "-" as an option VALUE,
+# and its `--` escape only helps positionals -- it cannot appear between an
+# option and its value. This tool's fields are free-form content, so a value
+# such as `-foo`, `-5` or `--verbose` is legitimate and must be loggable with
+# the documented `--text "<值>"` spelling. Rewrite the argv before parsing:
+#   `--opt -foo`  ->  `--opt=-foo`      (only when -foo is not a known option)
+#   `check -foo`  ->  `check -- -foo`   (leading-dash positional, moved behind --)
+# Known options are never rewritten, so `-h` / `--help` keep their meaning and
+# an option-looking value that IS a real option still wins (e.g. `--text -h`).
+_VALUE_OPTIONS = frozenset({
+    "--status", "--tid", "--text", "--path", "--next", "--root",
+    "--lock-timeout", "--lines", "--max-lines", "--max-bytes",
+    "--by", "--tail-lines", "--limit-done", "--limit-negative",
+})
+_FLAG_OPTIONS = frozenset({"--raw", "--strict"})
+_KNOWN_OPTIONS = _VALUE_OPTIONS | _FLAG_OPTIONS | frozenset({"-h", "--help"})
+# Subcommands with exactly one positional, where a leading-dash token is that
+# positional rather than an unknown option.
+_ONE_POSITIONAL_SUBCOMMANDS = frozenset({"init", "check"})
+
+
+def _normalize_argv(argv):
+    """Make leading-dash option values / positionals survive argparse.
+
+    See the module note above: without this, `add --text -foo` (the documented
+    spelling) dies with "expected one argument" and there is no way at all to
+    pass a leading-dash positional such as `check -foo`.
+    """
+    if not argv:
+        return list(argv)
+    out = [argv[0]]
+    rest = list(argv[1:])
+    sub = argv[0]
+    positional = None
+    i = 0
+    while i < len(rest):
+        tok = rest[i]
+        if tok == "--":
+            out.append("--")
+            if positional is not None:
+                out.append(positional)
+                positional = None
+            out.extend(rest[i + 1:])
+            break
+        if tok in _VALUE_OPTIONS and i + 1 < len(rest):
+            nxt = rest[i + 1]
+            if nxt.startswith("-") and nxt not in _KNOWN_OPTIONS:
+                out.append(tok + "=" + nxt)
+                i += 2
+                continue
+            out.append(tok)
+            i += 1
+            continue
+        if (positional is None and sub in _ONE_POSITIONAL_SUBCOMMANDS
+                and tok.startswith("-") and tok not in _KNOWN_OPTIONS):
+            positional = tok
+            i += 1
+            continue
+        out.append(tok)
+        i += 1
+    if positional is not None:
+        out.append("--")
+        out.append(positional)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 命令行入口
 def main():
 
@@ -1769,7 +1848,7 @@ def main():
     r.add_argument("--root")
     r.set_defaults(func=cmd_resume)
 
-    args = ap.parse_args()
+    args = ap.parse_args(_normalize_argv(sys.argv[1:]))
     args.func(args)
 
 

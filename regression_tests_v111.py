@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """project-protocol v1.1.0 review regression suite (v111).
 
-Covers the ten behaviours introduced by the post-v1.1.0 review batch, all of
+Covers the thirteen behaviours introduced by the post-v1.1.0 review batch, all of
 which are deterministic and offline. Every case runs on an isolated temporary
 project under the system temp dir (the default workdir is a fresh mkdtemp()
 container that self-cleans), so running the suite never dirties the repo.
@@ -20,6 +20,9 @@ Scope:
   N10  resume prints the real L1 section 关键决策索引 (never a phantom 决策 block)
   N11  a handoff publish conflict leaves NO .tmp residue and keeps the rival card
   N12  init <file>/sub is rejected by PREFLIGHT (not a mid-write INIT FAILED)
+  N13  ADD DUP matches the last RECORD (newline-less EOF, minute scope)
+  N14  resume reports ZERO bytes for an empty L0 tail (--lines 0 / empty L0)
+  N15  leading-dash option values / positionals survive argparse
 
 No assertion of the earlier v1.0.2 / v1.0.3 / v1.0.4 / v1.1.0 suites was
 weakened; those suites still run and must still pass independently.
@@ -532,6 +535,117 @@ def n12(s):
             "blocker_intact": True}
 
 
+# ---------------------------------------------------------------------------
+# N13 : ADD DUP matches the last RECORD, not a byte tail
+# ---------------------------------------------------------------------------
+def n13(s):
+    """ADD DUP compares the last record, with three guard properties.
+
+    * a file ending in the exact record WITHOUT its trailing newline is still a
+      duplicate (the old byte-exact check required `line\\n` at EOF, so a hand-
+      trimmed file let the same event be appended twice);
+    * a longer record whose tail merely CONTAINS the text is NOT a duplicate;
+    * the match is minute-scoped (the record text carries the timestamp), so the
+      same fields in a later minute are a genuine second event.
+    """
+    p = s.init("dedupe-record")
+    s.seed(p, tid="T01", text="dedupe-record-token")
+    lp = p / "06_记忆" / "L0_LOG.md"
+    data = lp.read_bytes()
+    assert data.endswith(b"\n"), "seed should end with a newline"
+    lp.write_bytes(data[:-1])                 # simulate a truncated final newline
+    assert not lp.read_bytes().endswith(b"\n")
+    r = s.cli("add", "--root", str(p), "--status", "DONE", "--tid", "T01",
+              "--text", "dedupe-record-token")
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+    assert "ADD DUP" in r.stdout, r.stdout[:DETAIL_CHARS]
+    assert lp.read_text(encoding="utf-8").count("dedupe-record-token") == 1, \
+        "duplicate appended for a newline-less EOF"
+
+    # A longer record ending with the same characters must NOT be deduped.
+    p2 = s.init("dedupe-longer-tail")
+    lp2 = p2 / "06_记忆" / "L0_LOG.md"
+    rec = "- [2026-11-11 21:00] DONE | T01 | Xdedupe-record-token | - | NEXT -\n"
+    lp2.write_bytes(lp2.read_bytes() + rec.encode("utf-8"))
+    r2 = s.cli("add", "--root", str(p2), "--status", "DONE", "--tid", "T01",
+               "--text", "dedupe-record-token")
+    assert r2.returncode == 0, (r2.returncode, r2.stdout, r2.stderr)
+    assert "ADD DUP" not in r2.stdout, r2.stdout[:DETAIL_CHARS]
+
+    # A different minute means a different record text -> NOT a duplicate.
+    p3 = s.init("dedupe-minute-scope")
+    s.seed(p3, tid="T01", text="minute-scope-token")
+    lp3 = p3 / "06_记忆" / "L0_LOG.md"
+    t = lp3.read_text(encoding="utf-8")
+    t = re.sub(r"\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}\]",
+               "[2000-01-01 00:00]", t)
+    lp3.write_text(t, encoding="utf-8")
+    r3 = s.cli("add", "--root", str(p3), "--status", "DONE", "--tid", "T01",
+               "--text", "minute-scope-token")
+    assert r3.returncode == 0, (r3.returncode, r3.stdout, r3.stderr)
+    assert "ADD DUP" not in r3.stdout, r3.stdout[:DETAIL_CHARS]
+    assert lp3.read_text(encoding="utf-8").count("minute-scope-token") == 2, \
+        "a later-minute event must be appended, not deduped"
+    return {"newline_less_eof_deduped": True, "longer_tail_kept": True,
+            "minute_scoped": True}
+
+
+# ---------------------------------------------------------------------------
+# N14 : resume reports ZERO bytes for an empty L0 tail
+# ---------------------------------------------------------------------------
+def n14(s):
+    """`resume --lines 0` (and an empty L0) must print 0 bytes, not 1.
+
+    The old accounting added a phantom trailing-newline byte unconditionally,
+    so an empty tail reported "0 行 / 1 字节".
+    """
+    p = s.init("resume-zero-bytes")
+    s.seed(p, text="zero-bytes-token")
+    r = s.cli("resume", "--root", str(p), "--lines", "0",
+              "--max-lines", "200", "--max-bytes", "60000")
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+    assert "0 行 / 0 字节" in r.stdout, r.stdout[:DETAIL_CHARS]
+
+    p2 = s.init("resume-empty-l0")
+    (p2 / "06_记忆" / "L0_LOG.md").write_text("", encoding="utf-8")
+    r2 = s.cli("resume", "--root", str(p2), "--lines", "0",
+               "--max-lines", "200", "--max-bytes", "60000")
+    assert r2.returncode == 0, (r2.returncode, r2.stdout, r2.stderr)
+    assert "0 行 / 0 字节" in r2.stdout, r2.stdout[:DETAIL_CHARS]
+    return {"zero_lines_zero_bytes": True, "empty_l0": True}
+
+
+# ---------------------------------------------------------------------------
+# N15 : leading-dash option values / positionals survive argparse
+# ---------------------------------------------------------------------------
+def n15(s):
+    """`--text -foo` (the documented spelling) and `check -foo` must both work.
+
+    argparse rejects any dash-prefixed token as an option value, and its `--`
+    escape only helps positionals, so before the argv normaliser there was no
+    way to log a value like `-foo` and no way at all to search for one.
+    """
+    p = s.init("leading-dash")
+    r = s.cli("add", "--root", str(p), "--status", "DONE", "--tid", "T01",
+              "--text", "-foo", "--next", "-bar")
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+    assert " -foo " in r.stdout and "NEXT -bar" in r.stdout, r.stdout[:DETAIL_CHARS]
+    c = s.cli("check", "-foo", "--root", str(p))
+    assert c.returncode == 0, (c.returncode, c.stdout, c.stderr)
+    assert "hits: 1" in c.stdout, c.stdout[:DETAIL_CHARS]
+    # Real options keep their meaning: `-h` is help, never a --text value.
+    h = s.cli("add", "-h")
+    assert h.returncode == 0, (h.returncode, h.stdout, h.stderr)
+    assert "--text TEXT" in h.stdout, h.stdout[:DETAIL_CHARS]
+    # `--opt=value` and the explicit `--` escape still work.
+    r2 = s.cli("add", "--root", str(p), "--status=DONE", "--text=-baz")
+    assert r2.returncode == 0, (r2.returncode, r2.stdout, r.stderr)
+    r3 = s.cli("check", "--root", str(p), "--", "-foo")
+    assert r3.returncode == 0, (r3.returncode, r3.stdout, r3.stderr)
+    return {"dash_value": True, "dash_positional": True,
+            "help_still_wins": True, "equals_and_dashdash": True}
+
+
 CASES = [
     ("N01a tail --lines 0/negative semantics", n01a),
     ("N01b resume --lines 0/negative semantics", n01b),
@@ -551,6 +665,9 @@ CASES = [
     ("N10 resume prints the real L1 decision-index section", n10),
     ("N11 handoff conflict leaves no .tmp residue", n11),
     ("N12 init <file>/sub is a clean preflight rejection", n12),
+    ("N13 ADD DUP matches the record (newline-less EOF / minute scope)", n13),
+    ("N14 resume reports 0 bytes for an empty L0 tail", n14),
+    ("N15 leading-dash values/positionals survive argparse", n15),
 ]
 
 
@@ -570,7 +687,7 @@ def main():
         s.case(name, fn)
     passed = sum(r["ok"] for r in s.results)
     report = {
-        "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检)",
+        "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数)",
         "cases": len(s.results),
         "passed": passed,
         "failed": len(s.results) - passed,

@@ -29,9 +29,13 @@ SOURCE = Path(os.environ.get("PP_SCRIPT", str(BASE / "progress.py")))
 # Fixtures live under the OS temp dir by default so this script can be
 # re-run at will without straying into the skill's own tree (v1.1.0 fix:
 # previous version dried into BASE and forced cleanup between runs).
+# An explicitly configured dir is resolved to an ABSOLUTE path: cmd_init
+# resolves its target directory, so a relative PP_FIXTURES would make the
+# Path.open fault-injection in A05-A08 compare a relative target against an
+# absolute one, silently never fire, and turn those cases into false failures.
 _PP_FIXTURES = os.environ.get("PP_FIXTURES")
 if _PP_FIXTURES:
-    FIXTURES = Path(_PP_FIXTURES)
+    FIXTURES = Path(_PP_FIXTURES).resolve()
     FIXTURES.mkdir(parents=True, exist_ok=True)
 else:
     FIXTURES = Path(tempfile.mkdtemp(prefix="pp-acceptance-"))

@@ -275,17 +275,17 @@
         "handoff": {
           "add": {
             "rc": 0,
-            "stdout": "- [2026-11-11 14:06] DONE | - | normal-token | - | NEXT -\n",
+            "stdout": "- [2026-11-11 21:27] DONE | - | normal-token | - | NEXT -\n",
             "stderr": ""
           },
           "tail": {
             "rc": 0,
-            "stdout": "- [2026-11-11 14:06] DONE | - | normal-token | - | NEXT -\n",
+            "stdout": "- [2026-11-11 21:27] DONE | - | normal-token | - | NEXT -\n",
             "stderr": ""
           },
           "check": {
             "rc": 0,
-            "stdout": "CHECK 'normal-token' | files scanned: 2 | hits: 1 | rejected/blocked: 0 | idea_rejected: 0 | shown: 1 | truncated: 0\n06_记忆/L0_LOG.md:8: - [2026-11-11 14:06] DONE | - | normal-token | - | NEXT -\nSTRICT: CLEAN\n",
+            "stdout": "CHECK 'normal-token' | files scanned: 2 | hits: 1 | rejected/blocked: 0 | idea_rejected: 0 | shown: 1 | truncated: 0\n06_记忆/L0_LOG.md:8: - [2026-11-11 21:27] DONE | - | normal-token | - | NEXT -\nSTRICT: CLEAN\n",
             "stderr": ""
           }
         },

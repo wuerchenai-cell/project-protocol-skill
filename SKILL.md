@@ -15,7 +15,7 @@ description: "用于「已明确采用本协议的新项目」的轻量项目状
 > 边界修复（不覆盖竞争文件、完成判定按版本选择）**全部保留**。上一版交付包为
 > `project-protocol-skill-v1.0.4.zip`，本版为 `project-protocol-skill-v1.1.0.zip`。
 > 已验证的写锁、旧项目保护、参数校验、输出预算与原有 75 项回归（base 24 + v103 29 +
-> v104 22）保持不变，另新增 v110 回归 12 项与 v111 审计回归 18 项。
+> v104 22）保持不变，另新增 v110 回归 12 项与 v111 审计回归 21 项。
 
 ## 0. 一句话与适用条件
 
@@ -210,6 +210,10 @@ python progress.py --help
 
 > **关于 `--next` 前缀**：日志行的第五段写入的是 `NEXT 下一步`，脚本在 `add` 时会**自动加 `NEXT ` 前缀**，所以你给 `--next` 的值只需写「下一步」内容本身（比如 `--next "抽检第 3 页"`），不要自己再写「NEXT」，否则会重复成 `NEXT NEXT xxx`。
 
+> **以 `-` 开头的值**：`--text` / `--next` / `--path` / `--tid` 等字段值，以及 `check` 的关键词，
+> 允许以 `-` 开头（如 `--text -foo`、`check -foo`）。脚本在解析前做 argv 归一化，把这类值
+> 折成 `--opt=value` 或移到 `--` 之后；真正的选项（如 `-h`）仍优先按选项解释，不会被当成值。
+
 > **命令能力清单**：给另一个 agent 快速看懂「每条命令做什么、何时调用、退出码语义」、避免逐条翻 `--help`，见同目录 `CAPABILITIES.md`（接口清单，事实来源是 progress.py）。
 
 并发说明见第 3 节铁律 4。`--lock-timeout` 控制等待写锁的秒数，**必须是有限正数**：
@@ -224,9 +228,10 @@ Windows 多进程并发时打开锁文件偶发 `PermissionError(13)` 瞬时共�
 `regression_tests_v103.py`（v1.0.3 七项修复新增用例）、
 `regression_tests_v104.py`（v1.0.4 两处初始化修复 22 项）、
 `regression_tests_v110.py`（v1.1.0 handoff/resume 8 项 + v1.0.4 向后兼容 4 项）、
-`regression_tests_v111.py`（审计批次 12 行为 18 项：0/负数语义、WIP 同 TID 取代、空格路径、
+`regression_tests_v111.py`（审计批次 15 行为 21 项：0/负数语义、WIP 同 TID 取代、空格路径、
 默认 resume 先看 L1、EINVAL 回退、二进制投毒、cp1252 管道、读锁不阻塞、长末行换行补齐、
-resume 打印真实 L1 小节名、交接冲突不留残片、`init <file>/sub` 预检拦截）与
+resume 打印真实 L1 小节名、交接冲突不留残片、`init <file>/sub` 预检拦截、去重按记录匹配、
+空 L0 尾报 0 字节、连字符字段值/关键词）与
 `independent_acceptance_v104.py`（独立验收 12 项，B02 注入点适配到新发布原语）。
 命令见 `INSTALL.md`。
 
