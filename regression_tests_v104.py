@@ -568,7 +568,7 @@ def main():
     out = Path(args.out).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-                   encoding="utf-8")
+                   encoding="utf-8", newline="\n")
     print("SUMMARY: %d/%d passed | %.2fs | %s"
           % (passed, len(s.results), report["elapsed_seconds"], out))
     s.cleanup()

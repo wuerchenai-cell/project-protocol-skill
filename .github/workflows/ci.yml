@@ -117,7 +117,7 @@ jobs:
           --out "$PP_WORK/regression-v110-result.json"
           --workdir "$PP_WORK/v110"
 
-      # ---- v111: this review's regression (0/负数/空间路径/默认 resume/WIP-TID/EINVAL/cp1252/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数/字段200上限/旧格式漂移可见; 23 项) ----
+      # ---- v111: this review's regression (0/负数/空间路径/默认 resume/WIP-TID/EINVAL/cp1252/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数/字段200上限/旧格式漂移可见/结果JSON固定LF; 24 项) ----
       - name: v111 regression
         shell: bash
         run: >

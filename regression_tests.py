@@ -629,7 +629,11 @@ def main():
     }
     out = Path(args.out).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # newline="\n" so the Windows working tree matches .gitattributes
+    # (* text=auto eol=lf): Path.write_text would otherwise translate the
+    # trailing "\n" to CRLF and the file would differ from the committed blob.
+    out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+                   encoding="utf-8", newline="\n")
     s.cleanup()
     print("\nSUMMARY: %d/%d passed | %ss | %s" %
           (passed, len(s.results), elapsed, out), flush=True)

@@ -312,7 +312,8 @@ summary = {"cases": len(RESULTS), "passed": sum(r["passed"] for r in RESULTS),
 RESULT_PATH = Path(os.environ.get("PP_RESULTS",
                                    str(Path(tempfile.gettempdir())
                                        / "pp-independent-results-v104.json")))
-RESULT_PATH.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+RESULT_PATH.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+                       encoding="utf-8", newline="\n")
 print(json.dumps({k: v for k, v in summary.items() if k != "results"}, ensure_ascii=False), flush=True)
 # Self-cleanup: this script created FIXTURES via mkdtemp; remove it after the
 # run so repeated runs stay clean. An explicitly configured PP_FIXTURES dir is

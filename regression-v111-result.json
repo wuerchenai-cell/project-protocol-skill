@@ -1,10 +1,10 @@
 {
-  "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数/字段200上限/旧格式漂移可见)",
-  "cases": 23,
-  "passed": 23,
+  "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数/字段200上限/旧格式漂移可见/结果JSON固定LF)",
+  "cases": 24,
+  "passed": 24,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 36.18,
+  "elapsed_seconds": 34.36,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
   "script_sha256": "13DC2A56C9A34DB76AD32F2F23437CD30F89240A751C8476003571BEEC28193E",
   "python": "3.13.14",
@@ -233,6 +233,20 @@
         "handoff_reports": true,
         "resume_reports_early": true,
         "clean_log_silent": true
+      }
+    },
+    {
+      "name": "N18 result-JSON writers pin LF (match eol=lf)",
+      "ok": true,
+      "detail": {
+        "writers_pin_lf": [
+          "regression_tests.py",
+          "regression_tests_v103.py",
+          "regression_tests_v104.py",
+          "regression_tests_v110.py",
+          "regression_tests_v111.py",
+          "independent_acceptance_v104.py"
+        ]
       }
     }
   ]

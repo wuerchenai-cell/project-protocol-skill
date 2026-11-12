@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """project-protocol v1.1.0 review regression suite (v111).
 
-Covers the fifteen behaviours introduced by the post-v1.1.0 review batch, all of
+Covers the eighteen behaviours introduced by the post-v1.1.0 review batch, all of
 which are deterministic and offline. Every case runs on an isolated temporary
 project under the system temp dir (the default workdir is a fresh mkdtemp()
 container that self-cleans), so running the suite never dirties the repo.
@@ -26,6 +26,7 @@ Scope:
   N16  every add field is capped at the documented FIELD_MAX_CHARS (200)
   N17  legacy 4-field L0 records keep their STATUS but report unrecoverable
        TID / NEXT, and handoff / resume surface the drift count
+  N18  every result-JSON writer pins newline="\n" (LF, matching eol=lf)
 
 No assertion of the earlier v1.0.2 / v1.0.3 / v1.0.4 / v1.1.0 suites was
 weakened; those suites still run and must still pass independently.
@@ -752,6 +753,41 @@ def n17(s):
             "resume_reports_early": True, "clean_log_silent": True}
 
 
+# ---------------------------------------------------------------------------
+# N18 : result JSON writers pin LF (match .gitattributes eol=lf)
+# ---------------------------------------------------------------------------
+_LF_PINNED = 'encoding="utf-8", newline="\\n")'
+_RESULT_WRITERS = (
+    "regression_tests.py",
+    "regression_tests_v103.py",
+    "regression_tests_v104.py",
+    "regression_tests_v110.py",
+    "regression_tests_v111.py",
+    "independent_acceptance_v104.py",
+)
+
+
+def n18(s):
+    """Every result-JSON writer must request LF explicitly.
+
+    The repository declares `* text=auto eol=lf`, so committed artifacts are
+    LF. `Path.write_text()` on Windows translates the trailing "\\n" to CRLF,
+    which makes the working-tree copy differ byte-for-byte from the committed
+    blob -- and breaks any byte-exact verification of the published artifact.
+    Pinning `newline="\\n"` keeps the writer honest on every platform.
+    """
+    here = Path(__file__).resolve().parent
+    checked = []
+    for name in _RESULT_WRITERS:
+        text = (here / name).read_text(encoding="utf-8")
+        assert "json.dumps(" in text, (name, "no JSON result writer found")
+        assert _LF_PINNED in text, (
+            name, 'result writer does not pin newline="\\n"; on Windows that '
+                  "writes CRLF while .gitattributes declares eol=lf")
+        checked.append(name)
+    return {"writers_pin_lf": checked}
+
+
 CASES = [
     ("N01a tail --lines 0/negative semantics", n01a),
     ("N01b resume --lines 0/negative semantics", n01b),
@@ -776,6 +812,7 @@ CASES = [
     ("N15 leading-dash values/positionals survive argparse", n15),
     ("N16 add fields are capped at 200 chars (documented limit)", n16),
     ("N17 legacy 4-field L0 records are counted and reported", n17),
+    ("N18 result-JSON writers pin LF (match eol=lf)", n18),
 ]
 
 
@@ -795,7 +832,7 @@ def main():
         s.case(name, fn)
     passed = sum(r["ok"] for r in s.results)
     report = {
-        "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数/字段200上限/旧格式漂移可见)",
+        "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数/字段200上限/旧格式漂移可见/结果JSON固定LF)",
         "cases": len(s.results),
         "passed": passed,
         "failed": len(s.results) - passed,
@@ -813,7 +850,7 @@ def main():
     out = Path(args.out).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-                   encoding="utf-8")
+                   encoding="utf-8", newline="\n")
     print("SUMMARY: %d/%d passed | %.2fs | %s"
           % (passed, len(s.results), report["elapsed_seconds"], out))
     s.cleanup()

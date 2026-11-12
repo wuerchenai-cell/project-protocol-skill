@@ -20,7 +20,7 @@ AI-agnostic 的项目交接协议 skill（**v1.1.0，模板 v1.8.0**）。给 AI
 | `INSTALL.md` | 安装方法（Codex / WorkBuddy 双宿主） |
 | `progress.py` | 命令行工具：`init / add / tail / check / handoff / resume`，纯 Python 标准库，无第三方依赖 |
 | `fixtures/` | 各版本 AGENTS.md 快照（回归测试基准） |
-| `regression_tests*.py` | 回归测试（base 24 + v103 29 + v104 22 + v110 12 + v111 23） |
+| `regression_tests*.py` | 回归测试（base 24 + v103 29 + v104 22 + v110 12 + v111 24） |
 | `independent_acceptance_v104.py` | 独立验收脚本（12 项） |
 | `*-result.json` | 各轮测试/验收的机器可读结果 |
 
@@ -49,7 +49,7 @@ python progress.py resume --root ./my-project --lines 30     # 接班时一次�
 ## 版本与状态
 
 - **v1.1.0（模板 v1.8.0）**：在 v1.0.4 基础上增补 `handoff` / `resume` 交接能力。
-- 回归测试全过：base 24 + v103 29 + v104 22 + v110 12 + v111 23 = **110 项**，另加独立验收 12 项（合计 122）。
+- 回归测试全过：base 24 + v103 29 + v104 22 + v110 12 + v111 24 = **111 项**，另加独立验收 12 项（合计 123）。
 - 进度工具 sha256：`13DC2A56C9A34DB76AD32F2F23437CD30F89240A751C8476003571BEEC28193E`。
 - 已知边界：`init` 仅限空目录（对非空老项目拒绝，属设计约束而非缺陷）；老项目需走"手工模式"（照目录契约手工建骨架，脚本层禁用属预期）。
 

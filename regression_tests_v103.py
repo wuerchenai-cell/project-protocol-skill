@@ -769,7 +769,7 @@ def main():
     out = Path(args.out).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n",
-                   encoding="utf-8")
+                   encoding="utf-8", newline="\n")
     s.cleanup()
     print("\nSUMMARY: %d/%d passed | %ss | %s" %
           (passed, len(s.results), result["elapsed_seconds"], out), flush=True)
