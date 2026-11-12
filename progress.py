@@ -26,7 +26,10 @@ Implemented guarantees:
     file retries transient Windows sharing violations a bounded number of
     times; the WRITE itself still happens exactly once, so no duplicates.
   * add fields are normalised with the SAME line-break definition the reader
-    uses, so one add always produces exactly one complete log record.
+    uses, so one add always produces exactly one complete log record. Each
+    field is additionally capped at FIELD_MAX_CHARS so one record cannot
+    dominate a tail window; the cap binds `add` only, never a hand-maintained
+    L0.
   * check distinguishes "clean" / "negative found" / "usage or read error"
     with exit codes 0 / 1 / 2, applies an output budget without hiding negative
     records from --strict, and treats any idea-frontmatter parse failure as an
@@ -35,10 +38,14 @@ Implemented guarantees:
     no-clobber write (O_EXCL | O_CREAT open then copy+fsync), never overwrites
     an existing card, and reads the latest WIP that has not been superseded by
     a later same-TID DONE / REJECTED / BLOCKED entry (a later DECIDED, or any
-    entry of a DIFFERENT TID, does NOT end the WIP).
+    entry of a DIFFERENT TID, does NOT end the WIP). L0 records that do not
+    match the full 5-field shape are COUNTED AND REPORTED, because their TID /
+    NEXT are unrecoverable while their STATUS still counts.
   * resume prints a cold-start handoff package with line / byte accounting and
     enforces an output budget by ACTUAL LINES (not list elements) so
-    card_text / l1 multi-line strings count correctly.
+    card_text / l1 multi-line strings count correctly. The same 5-field drift
+    count is reported up front, in the read-in manifest, so a partial-format
+    history is visible before the next agent acts on it.
   * all text reads accept an optional UTF-8 BOM (utf-8-sig); historical file
     bodies are never rewritten to achieve that compatibility.
 
@@ -46,6 +53,12 @@ Limits (documented, not hidden):
   * the lock protects only `add` appends to the current L0_LOG.md. Hand edits
     of L1_STATE.md, monthly log rotation, and writes that bypass this script
     are NOT protected; see 00_定义/COLLAB.md.
+  * every `add` field (结论 / 下一步 / 产物路径 / TID) is capped at
+    FIELD_MAX_CHARS = 200 characters; a longer value is a usage error (exit 2),
+    not a silent truncation. Hand-written L0 lines are not bounded by this.
+  * an L0 record that does not carry the full 5-field shape still contributes
+    its STATUS to every statistic, but its TID and NEXT are unrecoverable;
+    handoff / resume report how many such records exist rather than hiding it.
   * --lock-timeout must be a finite positive number; NaN/Inf/0/negative are
     rejected before the lock file is opened.
   * no L2/L3 generator, no archive subcommand, no installer, no hooks.
@@ -89,6 +102,13 @@ EXIT_TRUNCATED = 3     # resume reached its output budget and stopped early
 DEFAULT_LOCK_TIMEOUT = 10.0
 DEFAULT_MAX_LINES = 40
 DEFAULT_MAX_BYTES = 8192
+
+# Per-field cap for everything `add` writes into one L0 record (结论 / 下一步 /
+# 产物路径 / TID). One record must stay small enough that a tail window of a
+# few dozen lines remains a useful cold-start read; a runaway field would let a
+# single `add` dominate the whole window. This is a SCRIPT-side rule only: a
+# hand-maintained L0 (手工模式) is not written by `add` and is not bounded by it.
+FIELD_MAX_CHARS = 200
 # Resume is a cold-start handoff: the next agent MUST see L1 + "下一步" to
 # start safely, so its default budget is much larger than check's.
 DEFAULT_RESUME_MAX_LINES = 400
@@ -204,6 +224,8 @@ AGENTS_BODY = """# AGENTS.md
 - L2_SCENE.md / L3_PROFILE.md 是生成视图，禁止手写；不存在就留空。
 - 禁写密钥、cookies、账号、会话全文、推测；只写相对路径（用 `/`，不带盘符、不以 `/` 开头、不含 `..`），不复制文件内容。反斜杠会被脚本统一规范化为 `/`；该字段只是日志引用，脚本不会打开它。
 - 日志字段会被脚本统一单行化：换行、制表以及 U+0085 / U+2028 / U+2029 等所有会被读取端识别为换行的字符都会被替换，一次 `add` 始终产生一条完整记录。文件首部若带 UTF-8 BOM，读取端会兼容，不会漏检首行状态。
+- 字段长度：`add` 写入的每个字段（结论 / 下一步 / 产物路径 / TID）上限 200 字，超长即报错（退出码 2），**不静默截断**；想法 frontmatter 的 `reason` 同限。该上限只约束脚本写入，**手工直接写 L0 不受此限**。
+- 旧格式行：早期手工写的行可能只有 4 段（缺产物路径与 NEXT）。这些行的状态仍可读、仍计入统计，但 TID 与 NEXT **无法恢复**；`handoff` / `resume` 会报出「有 N 条记录不是完整 5 段格式」。L0 只增不改，历史行不回填、不改写；新行一律写完整 5 段。
 - 并发：`add` 用跨进程写锁保护 L0 追加；`--lock-timeout` 必须是**有限正数**（拒绝 nan / inf / -inf / 0 / 负数，在打开锁文件前校验），锁超时会明确失败，不假成功。Windows 下多进程快速开关锁文件时可能出现瞬时共享冲突，脚本只对「打开」做有界重试，写入仍只执行一次，不会重复记录；持续失败仍明确报错。**手工更新 L1、月末封存/轮转 L0、绕过脚本直接写 L0 都不受该锁保护**：须由 00_定义/COLLAB.md 指定的协调者先暂停其他写者，再单独执行。
 - 检索预算：`check` 默认限制输出条数/字节数，始终给出总命中数与截断提示，`--strict` 依据**全部**命中判定，不因展示窗口漏判。冷启动开销取决于状态文件大小、tail 行数与命中数量，**没有固定 token 保证**。
 
@@ -384,8 +406,8 @@ def clean_field(value, label):
     s = one_line(value)
     if not s:
         return "-"
-    if len(s) > 200:
-        die("%s 超过 200 字，请精简" % label)
+    if len(s) > FIELD_MAX_CHARS:
+        die("%s 超过 %d 字，请精简" % (label, FIELD_MAX_CHARS))
     return s
 
 
@@ -1217,8 +1239,9 @@ def parse_idea(text, where):
             if hash_pos >= 0:
                 r = r[:hash_pos].strip()
             r = one_line(r)
-            if len(r) > 200:
-                raise IdeaFormatError("%s: reason 字段超过 200 字，无法安全解析" % where)
+            if len(r) > FIELD_MAX_CHARS:
+                raise IdeaFormatError("%s: reason 字段超过 %d 字，无法安全解析"
+                                      % (where, FIELD_MAX_CHARS))
             reason = r or "-"
         # other fields (date, etc.) are accepted and ignored
     if not end_found:
@@ -1400,6 +1423,20 @@ def _log_tid(line):
     return m.group("tid").strip() or "-"
 
 
+def _unparsed_log_records(lines):
+    """L0 records that do NOT match the full 5-field LOG_FIELD_RE.
+
+    Legacy or hand-written records (typically an early 4-field line with no
+    artifact path and no NEXT) still carry a readable STATUS via LOG_RE, so
+    handoff/resume keep working and those lines still count toward the
+    DONE/DECIDED and REJECTED/BLOCKED statistics. What CANNOT be recovered is
+    their TID and NEXT: `_log_tid` yields "-" and `_log_next_command` yields
+    None. Reporting the count turns that silent loss into a visible warning
+    instead of letting a stale WIP look superseded (or a next step look absent).
+    """
+    return [ln for ln in lines if not LOG_FIELD_RE.match(ln)]
+
+
 def _latest_handoff(root):
     """Locate the most recent HANDOFF card; anonymous match returns None."""
     d = root / HANDOFF_DIR
@@ -1434,6 +1471,7 @@ def cmd_handoff(args):
     lines = _collect_log_lines(l0)
     if not lines:
         die("L0 没有可解析的日志行；交接前请至少完成一个可验证节点并记录一行")
+    legacy = _unparsed_log_records(lines)
     secs = _extract_l1_sections(l1)
     goal = secs.get("当前目标", "-") or "-"
     wip = secs.get("进行中(WIP)", "-") or "-"
@@ -1496,6 +1534,13 @@ def cmd_handoff(args):
         # Nothing negative anywhere in the log: state that positively rather
         # than leaving a bare "-" that reads like an incomplete query.
         lines_body += ["", "（注：L0 中暂无已否决/阻塞记录；无需防重复劳动约束。）"]
+    if legacy:
+        # Say so loudly: these lines still count for status statistics, but their
+        # TID / NEXT are unrecoverable, so a WIP among them cannot be reliably
+        # superseded and its next step cannot be surfaced.
+        lines_body += ["", "（注：L0 有 %d 条记录不是完整 5 段格式（多为早期手工行），"
+                       "其 TID 与 NEXT 无法解析；这些行仍参与状态统计，"
+                       "但不要据其 TID 判断 WIP 归属，也不要指望从它们恢复 NEXT。）" % len(legacy)]
     # The card always carries the RAW L1 "下一步" text, so the next agent sees
     # the authoritative plan even if no WIP line is in effect.
     lines_body += ["", "## 下一步（优先执行）"]
@@ -1564,6 +1609,7 @@ def cmd_resume(args):
         die("读取协议文件失败：%r" % (exc,))
     l1_lines = split_log_lines(l1)
     l0_lines_all = _collect_log_lines(l0)
+    legacy = _unparsed_log_records(l0_lines_all)
     # tail_slice: --lines 0 yields ZERO rows and negative is rejected by the
     # argparse type, so the round-trip time of "0 == whole list" cannot occur.
     l0_tail = tail_slice(l0_lines_all, args.lines)
@@ -1610,6 +1656,13 @@ def cmd_resume(args):
                % (len(l1_lines) + len(l0_tail) + (len(split_log_lines(card_text)) if card_text else 0),
                   l1_bytes + l0_bytes + card_bytes,
                   (l1_bytes + l0_bytes + card_bytes) // 3000 + 1))
+    if legacy:
+        # Part of the read-in MANIFEST, not a late footnote: a record whose TID /
+        # NEXT cannot be parsed changes how much of this handoff is trustworthy,
+        # so the next agent must see it before acting, not after.
+        out.append("  L0 格式健康：%d 条记录中 %d 条不是完整 5 段格式，其 TID 与 NEXT 无法解析"
+                   "（仍参与状态统计；勿据其 TID 判断 WIP 归属）"
+                   % (len(l0_lines_all), len(legacy)))
     out.append("")
     out.append("=== 先读这里：L1「下一步」（权威，按此执行）===")
     out.append(secs.get("下一步", "").strip() or "-（L1「下一步」节为空；请先补齐再开工）")

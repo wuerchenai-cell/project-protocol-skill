@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """project-protocol v1.1.0 review regression suite (v111).
 
-Covers the thirteen behaviours introduced by the post-v1.1.0 review batch, all of
+Covers the fifteen behaviours introduced by the post-v1.1.0 review batch, all of
 which are deterministic and offline. Every case runs on an isolated temporary
 project under the system temp dir (the default workdir is a fresh mkdtemp()
 container that self-cleans), so running the suite never dirties the repo.
@@ -23,6 +23,9 @@ Scope:
   N13  ADD DUP matches the last RECORD (newline-less EOF, minute scope)
   N14  resume reports ZERO bytes for an empty L0 tail (--lines 0 / empty L0)
   N15  leading-dash option values / positionals survive argparse
+  N16  every add field is capped at the documented FIELD_MAX_CHARS (200)
+  N17  legacy 4-field L0 records keep their STATUS but report unrecoverable
+       TID / NEXT, and handoff / resume surface the drift count
 
 No assertion of the earlier v1.0.2 / v1.0.3 / v1.0.4 / v1.1.0 suites was
 weakened; those suites still run and must still pass independently.
@@ -646,6 +649,109 @@ def n15(s):
             "help_still_wins": True, "equals_and_dashdash": True}
 
 
+# ---------------------------------------------------------------------------
+# N16 : every `add` field is capped at FIELD_MAX_CHARS (200), documented
+# ---------------------------------------------------------------------------
+def n16(s):
+    """A field longer than 200 chars is a usage error (exit 2), not a silent
+    truncation -- and a field of exactly 200 chars is accepted.
+
+    The cap keeps one record from dominating a tail window, so resume stays a
+    cheap cold-start read. It binds `add` only: a hand-maintained L0 is not
+    written by this path and is not bounded by it.
+    """
+    p = s.init("field-cap")
+    cap = s.mod.FIELD_MAX_CHARS
+    assert cap == 200, cap
+    # Exactly at the cap: accepted, one complete record.
+    r = s.cli("add", "--root", str(p), "--status", "DONE", "--tid", "T01",
+              "--text", "B" * cap)
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+    # One char over: rejected before any write, with the documented message.
+    r2 = s.cli("add", "--root", str(p), "--status", "DONE", "--tid", "T02",
+               "--text", "C" * (cap + 1))
+    assert r2.returncode == 2, (r2.returncode, r2.stdout, r2.stderr)
+    assert ("超过 %d 字" % cap) in r2.stderr, r2.stderr[:DETAIL_CHARS]
+    # The rejection wrote NOTHING: still exactly one record in the log.
+    body = (p / "06_记忆" / "L0_LOG.md").read_text(encoding="utf-8")
+    recs = [ln for ln in s.mod.split_log_lines(body) if ln.startswith("- [")]
+    assert len(recs) == 1, recs
+    assert "C" * 10 not in body, "over-long value leaked into the log"
+    # The same cap applies to the other free-text fields, not just --text.
+    r3 = s.cli("add", "--root", str(p), "--status", "DONE", "--tid", "T03",
+               "--text", "ok", "--next", "D" * (cap + 1))
+    assert r3.returncode == 2, (r3.returncode, r3.stdout, r3.stderr)
+    assert ("超过 %d 字" % cap) in r3.stderr, r3.stderr[:DETAIL_CHARS]
+    return {"cap": cap, "at_cap_accepted": True, "over_cap_rejected": True,
+            "no_partial_write": True, "next_field_capped": True}
+
+
+# ---------------------------------------------------------------------------
+# N17 : legacy / hand-written 4-field L0 records are counted and reported
+# ---------------------------------------------------------------------------
+def n17(s):
+    """A 4-field record keeps its STATUS but loses TID / NEXT, and the drift is
+    reported instead of being silent.
+
+    Real logs accumulate hand-written or older-format lines (this workspace has
+    fifteen). They must still count toward the DONE / REJECTED statistics, but
+    their TID and NEXT are unrecoverable -- so handoff and resume must say how
+    many there are, otherwise a stale WIP can look superseded and a next step
+    can look absent.
+    """
+    p = s.init("legacy-drift")
+    s.seed(p, tid="T01", status="DONE", text="modern-token")
+    lp = p / "06_记忆" / "L0_LOG.md"
+    legacy_rejected = "- [2000-01-01 00:00] REJECTED | T09 | legacy-rejected-token"
+    legacy_wip = "- [2000-01-01 00:01] WIP | T09 | legacy-wip-token"
+    with lp.open("a", encoding="utf-8", newline="\n") as f:
+        f.write(legacy_rejected + "\n" + legacy_wip + "\n")
+
+    # Reader-side classification: both legacy lines fail the 5-field shape.
+    recs = [ln for ln in s.mod.split_log_lines(lp.read_text(encoding="utf-8"))
+            if ln.startswith("- [")]
+    assert len(recs) == 3, recs
+    assert len(s.mod._unparsed_log_records(recs)) == 2, recs
+    # ...but their STATUS is still readable, so they keep counting.
+    assert s.mod._log_status(legacy_rejected) == "REJECTED"
+    assert s.mod._log_status(legacy_wip) == "WIP"
+    # What is NOT recoverable:
+    assert s.mod._log_tid(legacy_wip) == "-"
+    assert s.mod._log_next_command(legacy_wip) is None
+
+    s.set_next(p, "L1-LEGACY-PLAN")
+    card = s.handoff_ok(p, tail_lines=30)
+    body = card.read_text(encoding="utf-8")
+    assert "2 条记录不是完整 5 段格式" in body, body[:DETAIL_CHARS]
+    # The legacy REJECTED line still appears in the negative block.
+    assert "legacy-rejected-token" in body, "legacy REJECTED line lost from stats"
+    # The legacy WIP's TID is gone, so it must NOT be treated as a live WIP
+    # with a recoverable next step: no fabricated "从最近 WIP" command.
+    assert "从最近 WIP" not in body, body[:DETAIL_CHARS]
+
+    r = s.cli("resume", "--root", str(p), "--lines", "30",
+              "--max-lines", "400", "--max-bytes", "262144")
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+    assert "3 条记录中 2 条不是完整 5 段格式" in r.stdout, r.stdout[:DETAIL_CHARS]
+    # The drift warning must land in the read-in manifest, i.e. BEFORE the L1
+    # next-step block, so it cannot be hidden behind the card.
+    i_drift = r.stdout.find("L0 格式健康")
+    i_next = r.stdout.find("=== 先读这里：L1「下一步」")
+    assert i_drift != -1 and i_next != -1 and i_drift < i_next, r.stdout[:DETAIL_CHARS]
+
+    # A clean log reports no drift at all (the note is conditional, not noise).
+    p2 = s.init("no-drift")
+    s.seed(p2, text="clean-token")
+    card2 = s.handoff_ok(p2, tail_lines=30)
+    assert "不是完整 5 段格式" not in card2.read_text(encoding="utf-8"), "false drift report"
+    r2 = s.cli("resume", "--root", str(p2), "--lines", "10",
+               "--max-lines", "400", "--max-bytes", "262144")
+    assert "L0 格式健康" not in r2.stdout, "false drift report on a clean log"
+    return {"legacy_counted": 2, "status_still_counts": True,
+            "tid_next_unrecoverable": True, "handoff_reports": True,
+            "resume_reports_early": True, "clean_log_silent": True}
+
+
 CASES = [
     ("N01a tail --lines 0/negative semantics", n01a),
     ("N01b resume --lines 0/negative semantics", n01b),
@@ -668,6 +774,8 @@ CASES = [
     ("N13 ADD DUP matches the record (newline-less EOF / minute scope)", n13),
     ("N14 resume reports 0 bytes for an empty L0 tail", n14),
     ("N15 leading-dash values/positionals survive argparse", n15),
+    ("N16 add fields are capped at 200 chars (documented limit)", n16),
+    ("N17 legacy 4-field L0 records are counted and reported", n17),
 ]
 
 
@@ -687,7 +795,7 @@ def main():
         s.case(name, fn)
     passed = sum(r["ok"] for r in s.results)
     report = {
-        "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数)",
+        "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数/字段200上限/旧格式漂移可见)",
         "cases": len(s.results),
         "passed": passed,
         "failed": len(s.results) - passed,

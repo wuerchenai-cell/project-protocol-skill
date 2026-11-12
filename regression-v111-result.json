@@ -1,12 +1,12 @@
 {
-  "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数)",
-  "cases": 21,
-  "passed": 21,
+  "suite": "project-protocol v111 review regression (0/负数/WIP/空格路径/L1-first/EINVAL/二进制/cp1252/读锁/换行补齐/L1小节名/冲突无残片/祖先文件预检/去重按记录/空尾0字节/连字符参数/字段200上限/旧格式漂移可见)",
+  "cases": 23,
+  "passed": 23,
   "failed": 0,
   "all_passed": true,
-  "elapsed_seconds": 29.74,
+  "elapsed_seconds": 36.18,
   "script": "C:\\Users\\tjs\\.agents\\skills\\project-protocol\\progress.py",
-  "script_sha256": "1CB9785978EDAB9393F5F927B13400A478E4468ED4E3C9336BC31AB30C7D242F",
+  "script_sha256": "13DC2A56C9A34DB76AD32F2F23437CD30F89240A751C8476003571BEEC28193E",
   "python": "3.13.14",
   "platform_verified": "Windows-11-10.0.26200-SP0",
   "platforms_not_verified": [
@@ -105,7 +105,7 @@
       "ok": true,
       "detail": {
         "fallback": "O_EXCL|O_CREAT",
-        "bytes": 7956
+        "bytes": 8564
       }
     },
     {
@@ -210,6 +210,29 @@
         "dash_positional": true,
         "help_still_wins": true,
         "equals_and_dashdash": true
+      }
+    },
+    {
+      "name": "N16 add fields are capped at 200 chars (documented limit)",
+      "ok": true,
+      "detail": {
+        "cap": 200,
+        "at_cap_accepted": true,
+        "over_cap_rejected": true,
+        "no_partial_write": true,
+        "next_field_capped": true
+      }
+    },
+    {
+      "name": "N17 legacy 4-field L0 records are counted and reported",
+      "ok": true,
+      "detail": {
+        "legacy_counted": 2,
+        "status_still_counts": true,
+        "tid_next_unrecoverable": true,
+        "handoff_reports": true,
+        "resume_reports_early": true,
+        "clean_log_silent": true
       }
     }
   ]
